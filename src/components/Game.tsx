@@ -32,6 +32,24 @@ interface GameProps {
   isPaused: boolean;
 }
 
+function CameraSync({ countdown }: { countdown: number | null }) {
+  const { camera } = useThree();
+  const resetDone = useRef(false);
+
+  useEffect(() => {
+    if (countdown === 3 && !resetDone.current) {
+      // Force looking straight ahead at the target zone
+      camera.rotation.set(0, 0, 0);
+      camera.position.set(0, 2, 0);
+      resetDone.current = true;
+    } else if (countdown === null) {
+      resetDone.current = false;
+    }
+  }, [countdown, camera]);
+
+  return null;
+}
+
 export default function Game({ settings, onEnd, onUpdateStats, isPaused }: GameProps) {
   const [targets, setTargets] = useState<TargetData[]>([]);
   const [countdown, setCountdown] = useState<number | null>(3);
@@ -87,6 +105,10 @@ export default function Game({ settings, onEnd, onUpdateStats, isPaused }: GameP
         setCountdown(null);
         clearInterval(interval);
         startSession();
+        // Request pointer lock when game starts
+        setTimeout(() => {
+          document.body.requestPointerLock?.();
+        }, 100);
       } else {
         setCountdown(count);
       }
@@ -322,6 +344,7 @@ export default function Game({ settings, onEnd, onUpdateStats, isPaused }: GameP
   return (
     <div className="w-full h-full cursor-crosshair">
       <Canvas shadows camera={{ fov: isScoped ? 15 : settings.fov, position: [0, 2, 0] }}>
+        <CameraSync countdown={countdown} />
         {settings.mode === GameMode.MAP ? (
             <>
                 <Sky sunPosition={[100, 20, 100]} />
@@ -372,7 +395,7 @@ export default function Game({ settings, onEnd, onUpdateStats, isPaused }: GameP
                 isScoped={isScoped}
             />
         )}
-        {!isPaused && countdown === null && <PointerLockControls pointerSpeed={isScoped ? settings.adsSensitivity : settings.sensitivity} />}
+        {!isPaused && <PointerLockControls pointerSpeed={isScoped ? settings.adsSensitivity : settings.sensitivity} />}
       </Canvas>
 
       {isScoped && (
