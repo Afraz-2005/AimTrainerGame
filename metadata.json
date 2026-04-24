@@ -1,0 +1,6 @@
+{
+  "name": "VoxelAim",
+  "description": "A high-precision, voxel-themed FPS aim trainer with customizable HUD, crosshairs, and professional sensitivity settings.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["3D Rendering", "FPS Controls"]
+}
