@@ -13,19 +13,25 @@ export enum GameMode {
   REACTION = 'REACTION',
 }
 
-export type WeaponType = 'PISTOL' | 'AK47' | 'AWP';
+export type WeaponType = 'PISTOL' | 'AK47' | 'AWP' | 'KNIFE';
 export type Difficulty = 'EASY' | 'MEDIUM' | 'HARD';
 
 export interface PopBotsSettings {
   weapon: WeaponType;
   difficulty: Difficulty;
-  botColor: string;
+  botBodyColor: string;
+  botHeadColor: string;
   obstacleColor: string;
 }
 
 export interface MapSettings {
   botsHitBack: boolean;
   botsToKill: number;
+  infiniteAmmo: boolean;
+  isStaticBots: boolean;
+  difficulty: Difficulty;
+  botBodyColor: string;
+  botHeadColor: string;
 }
 
 export interface CrosshairSettings {
@@ -42,6 +48,11 @@ export interface HUDSettings {
   scale: number;
   showFPS: boolean;
   showKills: boolean;
+}
+
+export interface TacticalSettings {
+  fillWithBots: boolean;
+  botDifficulty: Difficulty;
 }
 
 export interface GameSettings {
@@ -64,7 +75,14 @@ export interface GameStats {
   accuracy: number;
   timeRemaining: number;
   health?: number;
+  ammo?: number;
+  maxAmmo?: number;
   lastReactionTime?: number;
+  isReloading?: boolean;
+  status?: 'victory' | 'loss';
+  playerPos?: { x: number; z: number };
+  playerYaw?: number;
+  activeTargets?: TargetData[];
 }
 
 export interface TargetData {
@@ -73,4 +91,24 @@ export interface TargetData {
   size: number;
   spawnIndex?: number;
   health: number;
+  team?: 'A' | 'B';
+}
+
+export interface MultiplayerSession {
+  id: string;
+  hostId: string;
+  players: {
+    [uid: string]: {
+      name: string;
+      team: 'A' | 'B';
+      pos: { x: number; y: number; z: number };
+      rot: { x: number; y: number; z: number };
+      health: number;
+      kills: number;
+      deaths: number;
+      lastSeen: number;
+    }
+  };
+  status: 'waiting' | 'playing' | 'ended';
+  createdAt: number;
 }

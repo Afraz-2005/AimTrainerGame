@@ -1,6 +1,8 @@
 let audioContext: AudioContext | null = null;
 
-export const playSound = (type: 'fire' | 'click' | 'hit' | 'headshot' | 'kill') => {
+export const playSound = (type: 'fire' | 'click' | 'hit' | 'headshot' | 'kill' | 'success' | 'error') => {
+  if (typeof window === 'undefined') return;
+  
   if (!audioContext) {
     audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
   }
@@ -79,6 +81,30 @@ export const playSound = (type: 'fire' | 'click' | 'hit' | 'headshot' | 'kill') 
       
       oscillator.start(now);
       oscillator.stop(now + 0.2);
+      break;
+
+    case 'success':
+      // Uplifting arpeggio
+      oscillator.type = 'sine';
+      [440, 554, 659, 880].forEach((freq, i) => {
+        const time = now + i * 0.1;
+        oscillator.frequency.setValueAtTime(freq, time);
+      });
+      gainNode.gain.setValueAtTime(0.2, now);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+      oscillator.start(now);
+      oscillator.stop(now + 0.5);
+      break;
+
+    case 'error':
+      // Low buzz
+      oscillator.type = 'sawtooth';
+      oscillator.frequency.setValueAtTime(80, now);
+      oscillator.frequency.exponentialRampToValueAtTime(40, now + 0.3);
+      gainNode.gain.setValueAtTime(0.2, now);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+      oscillator.start(now);
+      oscillator.stop(now + 0.3);
       break;
   }
 };

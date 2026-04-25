@@ -21,12 +21,18 @@ const DEFAULT_SETTINGS: GameSettings = {
   popBots: {
     weapon: 'PISTOL',
     difficulty: 'MEDIUM',
-    botColor: '#a3e635',
+    botBodyColor: '#ef4444',
+    botHeadColor: '#fbbf24',
     obstacleColor: '#333333',
   },
   map: {
     botsHitBack: false,
     botsToKill: 15,
+    infiniteAmmo: false,
+    isStaticBots: false,
+    difficulty: 'MEDIUM',
+    botBodyColor: '#3b82f6',
+    botHeadColor: '#fbbf24',
   },
   crosshair: {
     style: 'cross',
@@ -50,6 +56,7 @@ export default function App() {
   const [lastStats, setLastStats] = useState<GameStats | null>(null);
   const [currentStats, setCurrentStats] = useState<GameStats | null>(null);
   const [isPaused, setIsPaused] = useState(false);
+  const [sessionId, setSessionId] = useState<string | null>(null);
 
   const startGame = useCallback((mode: GameMode) => {
     setSettings(prev => ({ ...prev, mode }));
@@ -77,8 +84,10 @@ export default function App() {
         setIsPaused(prev => !prev);
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    if (typeof window !== 'undefined') {
+      window.addEventListener('keydown', handleKeyDown);
+      return () => window.removeEventListener('keydown', handleKeyDown);
+    }
   }, [view]);
 
   return (
@@ -157,7 +166,10 @@ export default function App() {
 
               <div className="col-span-8 bg-zinc-900 p-8 border-4 border-zinc-800 relative overflow-y-auto">
                 <div className="absolute -top-4 left-6 text-black px-4 py-1 font-black uppercase text-sm italic" style={{ backgroundColor: settings.themeColor }}>Configurator</div>
-                <Settings settings={settings} onUpdate={setSettings} />
+                <Settings 
+                  settings={settings} 
+                  onUpdate={setSettings} 
+                />
               </div>
             </main>
 
@@ -186,12 +198,14 @@ export default function App() {
               onEnd={endGame}
               onUpdateStats={setCurrentStats}
               isPaused={isPaused}
+              onUpdateSettings={setSettings}
             />
             <HUD 
               settings={settings.hud} 
               crosshair={settings.crosshair}
               stats={currentStats}
               mode={settings.mode}
+              botsHitBack={settings.map.botsHitBack}
             />
             
             <AnimatePresence>

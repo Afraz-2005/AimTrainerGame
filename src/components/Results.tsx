@@ -15,20 +15,34 @@ export default function Results({ stats, onRetry, onMenu }: ResultsProps) {
       animate={{ opacity: 1, scale: 1 }}
       className="absolute inset-0 z-[60] flex items-center justify-center bg-black/95 p-4"
     >
-      <div className="w-full max-w-xl bg-zinc-950 border-[16px] border-zinc-900 p-10 shadow-2xl relative">
-        <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-lime-400 text-black px-6 py-2 font-black uppercase text-xl italic skew-x-[-12deg]">
-          Results Found
+      <div className={`w-full max-w-xl bg-zinc-950 border-[16px] p-10 shadow-2xl relative ${
+        stats.status === 'victory' ? 'border-lime-400/20' : 
+        stats.status === 'loss' ? 'border-red-500/20' : 
+        'border-zinc-900'
+      }`}>
+        <div className={`absolute -top-8 left-1/2 -translate-x-1/2 text-black px-6 py-2 font-black uppercase text-xl italic skew-x-[-12deg] ${
+          stats.status === 'victory' ? 'bg-lime-400' : 
+          stats.status === 'loss' ? 'bg-red-500' : 
+          'bg-lime-400'
+        }`}>
+          {stats.status === 'victory' ? 'Victory confirmed' : stats.status === 'loss' ? 'Critical Failure' : 'Results Found'}
         </div>
 
         <h2 className="text-7xl font-black text-white mb-2 text-center tracking-tighter uppercase italic leading-[0.8] mb-12 mt-4">
-          Training<br /><span className="text-lime-400">Complete</span>
+          {stats.status === 'victory' ? (
+            <>Mission<br /><span className="text-lime-400">Success</span></>
+          ) : stats.status === 'loss' ? (
+            <>Mission<br /><span className="text-red-500">Failure</span></>
+          ) : (
+            <>Training<br /><span className="text-lime-400">Complete</span></>
+          )}
         </h2>
 
         <div className="grid grid-cols-2 gap-4 mb-10">
-          <StatBox icon={<Target className="w-4 h-4" />} label="Accuracy" value={`${stats.accuracy.toFixed(1)}%`} sub="Precision index" />
-          <StatBox icon={<Zap className="w-4 h-4" />} label="Score" value={stats.score.toLocaleString()} sub="Global rating" />
-          <StatBox icon={<MousePointer className="w-4 h-4" />} label="Hits" value={stats.hits.toString()} sub="Targets destroyed" />
-          <StatBox icon={<RotateCcw className="w-4 h-4" />} label="Misses" value={stats.misses.toString()} sub="Total errors" />
+          <StatBox icon={<Target className="w-4 h-4" />} label="Accuracy" value={`${stats.accuracy.toFixed(1)}%`} sub="Precision index" status={stats.status} />
+          <StatBox icon={<Zap className="w-4 h-4" />} label="Score" value={stats.score.toLocaleString()} sub="Global rating" status={stats.status} />
+          <StatBox icon={<MousePointer className="w-4 h-4" />} label="Hits" value={stats.hits.toString()} sub="Targets destroyed" status={stats.status} />
+          <StatBox icon={<RotateCcw className="w-4 h-4" />} label="Misses" value={stats.misses.toString()} sub="Total errors" status={stats.status} />
         </div>
 
         <div className="flex flex-col gap-3">
@@ -50,9 +64,13 @@ export default function Results({ stats, onRetry, onMenu }: ResultsProps) {
   );
 }
 
-function StatBox({ icon, label, value, sub }: { icon: React.ReactNode; label: string; value: string; sub: string }) {
+function StatBox({ icon, label, value, sub, status }: { icon: React.ReactNode; label: string; value: string; sub: string; status?: 'victory' | 'loss' }) {
   return (
-    <div className="bg-zinc-900 p-6 border-l-4 border-lime-400 shadow-lg">
+    <div className={`bg-zinc-900 p-6 border-l-4 shadow-lg ${
+      status === 'victory' ? 'border-lime-400' :
+      status === 'loss' ? 'border-red-500' :
+      'border-lime-400'
+    }`}>
       <div className="flex items-center gap-2 text-zinc-500 mb-2">
         {icon}
         <span className="text-[10px] font-bold uppercase tracking-widest">{label}</span>
