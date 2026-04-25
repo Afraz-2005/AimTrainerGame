@@ -19,8 +19,7 @@ export type Difficulty = 'EASY' | 'MEDIUM' | 'HARD';
 export interface PopBotsSettings {
   weapon: WeaponType;
   difficulty: Difficulty;
-  botBodyColor: string;
-  botHeadColor: string;
+  botColor: string;
   obstacleColor: string;
 }
 
@@ -29,9 +28,6 @@ export interface MapSettings {
   botsToKill: number;
   infiniteAmmo: boolean;
   isStaticBots: boolean;
-  difficulty: Difficulty;
-  botBodyColor: string;
-  botHeadColor: string;
 }
 
 export interface CrosshairSettings {
@@ -48,11 +44,6 @@ export interface HUDSettings {
   scale: number;
   showFPS: boolean;
   showKills: boolean;
-}
-
-export interface TacticalSettings {
-  fillWithBots: boolean;
-  botDifficulty: Difficulty;
 }
 
 export interface GameSettings {
@@ -91,24 +82,4 @@ export interface TargetData {
   size: number;
   spawnIndex?: number;
   health: number;
-  team?: 'A' | 'B';
-}
-
-export interface MultiplayerSession {
-  id: string;
-  hostId: string;
-  players: {
-    [uid: string]: {
-      name: string;
-      team: 'A' | 'B';
-      pos: { x: number; y: number; z: number };
-      rot: { x: number; y: number; z: number };
-      health: number;
-      kills: number;
-      deaths: number;
-      lastSeen: number;
-    }
-  };
-  status: 'waiting' | 'playing' | 'ended';
-  createdAt: number;
 }

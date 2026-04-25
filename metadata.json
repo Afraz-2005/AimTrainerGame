@@ -1,6 +1,6 @@
 {
   "name": "VoxelAim",
-  "description": "A high-precision, voxel-themed FPS aim trainer and tactical shooter. Features customizable HUD, professional aim training modes, and a dedicated 2v2 Tactical Multiplayer mode with generated room codes.",
+  "description": "A high-precision, voxel-themed FPS aim trainer with customizable HUD, crosshairs, and professional sensitivity settings.",
   "requestFramePermissions": [],
   "majorCapabilities": ["3D Rendering", "FPS Controls"]
 }

@@ -1,7 +1,6 @@
-import { GameSettings, GameMode } from '../types';
+import { GameSettings } from '../types';
 import { CrosshairRenderer } from './HUD';
 import { playSound } from '../lib/audio';
-import { useState } from 'react';
 
 interface SettingsProps {
   settings: GameSettings;
@@ -122,7 +121,7 @@ export default function Settings({ settings, onUpdate }: SettingsProps) {
       <div className="space-y-6 flex flex-col">
         <section>
           <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3 italic">Theme & Colors</h3>
-          <div className="flex flex-wrap gap-2 mb-4 items-center">
+          <div className="flex flex-wrap gap-2 mb-4">
             {['#a3e635', '#22d3ee', '#f43f5e', '#fbbf24', '#ffffff'].map(color => (
               <button 
                 key={color}
@@ -133,15 +132,6 @@ export default function Settings({ settings, onUpdate }: SettingsProps) {
                 style={{ backgroundColor: color }}
               />
             ))}
-            <div className="relative group">
-              <input 
-                type="color"
-                value={settings.themeColor}
-                onChange={(e) => updateCrosshairColor(e.target.value)}
-                className="w-8 h-8 p-0 border-0 bg-transparent cursor-pointer"
-              />
-              <span className="absolute -top-6 left-1/2 -translate-x-1/2 bg-black text-[8px] px-1 hidden group-hover:block whitespace-nowrap">CUSTOM</span>
-            </div>
           </div>
           {settings.mode !== 'MAP' && (
             <div className="grid grid-cols-3 gap-2">
@@ -164,20 +154,8 @@ export default function Settings({ settings, onUpdate }: SettingsProps) {
         </section>
 
         <section>
-          <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3 italic">Independent HUD Color</h3>
-          <div className="flex items-center gap-4 mb-4">
-            <input 
-              type="color"
-              value={settings.hud.color}
-              onChange={(e) => onUpdate({ ...settings, hud: { ...settings.hud, color: e.target.value } })}
-              className="w-12 h-12 p-0 border-0 bg-transparent cursor-pointer"
-            />
-            <div className="text-[10px] font-mono text-zinc-400">
-              <p>HEX: {settings.hud.color.toUpperCase()}</p>
-              <p className="text-zinc-600">Affects UI and Minimap</p>
-            </div>
-          </div>
-          <div className="space-y-2 mb-6">
+          <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3 italic">HUD Visuals</h3>
+          <div className="space-y-2">
             <div className="flex justify-between text-[10px] font-mono text-zinc-400 uppercase">
               <span>UI Scale</span>
               <span>{settings.hud.scale.toFixed(2)}x</span>
@@ -192,10 +170,9 @@ export default function Settings({ settings, onUpdate }: SettingsProps) {
               className="w-full h-2 bg-black appearance-none accent-white cursor-pointer"
             />
           </div>
+        </section>
 
-          </section>
-
-          <div className="mt-auto p-4 border" style={{ backgroundColor: `${settings.themeColor}10`, borderColor: `${settings.themeColor}30` }}>
+        <div className="mt-auto p-4 border" style={{ backgroundColor: `${settings.themeColor}10`, borderColor: `${settings.themeColor}30` }}>
           <p className="text-[10px] font-mono leading-relaxed" style={{ color: settings.themeColor }}>
             ENVIRONMENT: {settings.theme.toUpperCase()}<br />
             FOV: {settings.fov} (VALORANT/CS2)<br />
@@ -241,46 +218,19 @@ export default function Settings({ settings, onUpdate }: SettingsProps) {
           </section>
 
           <section>
-            <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3 italic">Bot Visuals</h3>
-            <div className="grid grid-cols-1 gap-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <span className="text-[10px] font-mono text-zinc-500 uppercase block">Body Color</span>
-                  <div className="flex flex-wrap gap-2 items-center">
-                    {['#3b82f6', '#ef4444', '#a3e635', '#fbbf24', '#ffffff'].map(c => (
-                      <button 
-                        key={c}
-                        onClick={() => onUpdate({ ...settings, popBots: { ...settings.popBots, botBodyColor: c } })}
-                        className={`w-6 h-6 transition-all ${settings.popBots.botBodyColor === c ? 'border-2 border-white scale-110' : 'opacity-50 hover:opacity-100'}`}
-                        style={{ backgroundColor: c }}
-                      />
-                    ))}
-                    <input 
-                      type="color"
-                      value={settings.popBots.botBodyColor}
-                      onChange={(e) => onUpdate({ ...settings, popBots: { ...settings.popBots, botBodyColor: e.target.value } })}
-                      className="w-6 h-6 p-0 border-0 bg-transparent cursor-pointer"
+            <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3 italic">Bot Customization</h3>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <span className="text-[10px] font-mono text-zinc-500 uppercase block">Bot Color</span>
+                <div className="flex gap-2">
+                  {['#a3e635', '#22d3ee', '#f43f5e', '#fbbf24', '#ffffff'].map(c => (
+                    <button 
+                      key={c}
+                      onClick={() => onUpdate({ ...settings, popBots: { ...settings.popBots, botColor: c } })}
+                      className={`w-6 h-6 transition-all ${settings.popBots.botColor === c ? 'border-2 border-white scale-110' : 'opacity-50 hover:opacity-100'}`}
+                      style={{ backgroundColor: c }}
                     />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <span className="text-[10px] font-mono text-zinc-500 uppercase block">Head Color</span>
-                  <div className="flex flex-wrap gap-2 items-center">
-                    {['#fbbf24', '#f472b6', '#22d3ee', '#ffffff', '#000000'].map(c => (
-                      <button 
-                        key={c}
-                        onClick={() => onUpdate({ ...settings, popBots: { ...settings.popBots, botHeadColor: c } })}
-                        className={`w-6 h-6 transition-all ${settings.popBots.botHeadColor === c ? 'border-2 border-white scale-110' : 'opacity-50 hover:opacity-100'}`}
-                        style={{ backgroundColor: c }}
-                      />
-                    ))}
-                    <input 
-                      type="color"
-                      value={settings.popBots.botHeadColor}
-                      onChange={(e) => onUpdate({ ...settings, popBots: { ...settings.popBots, botHeadColor: e.target.value } })}
-                      className="w-6 h-6 p-0 border-0 bg-transparent cursor-pointer"
-                    />
-                  </div>
+                  ))}
                 </div>
               </div>
             </div>
@@ -330,26 +280,6 @@ export default function Settings({ settings, onUpdate }: SettingsProps) {
                 {settings.map.botsHitBack ? 'ENABLED' : 'DISABLED'}
               </button>
             </div>
-            
-            {settings.map.botsHitBack && (
-              <div className="space-y-4 pt-2">
-                <span className="text-[10px] font-mono text-zinc-500 uppercase block">Combat Difficulty</span>
-                <div className="grid grid-cols-3 gap-2">
-                  {(['EASY', 'MEDIUM', 'HARD'] as const).map(d => (
-                    <button 
-                      key={d}
-                      onClick={() => onUpdate({ ...settings, map: { ...settings.map, difficulty: d } })}
-                      className={`py-2 text-[10px] font-bold uppercase transition-all ${
-                        settings.map.difficulty === d ? 'bg-white text-black' : 'bg-zinc-800 text-zinc-400 hover:bg-lime-400 hover:text-black'
-                      }`}
-                    >
-                      {d}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
             <div className="flex items-center justify-between p-4 bg-zinc-900 border border-zinc-800">
               <span className="text-[10px] font-bold uppercase text-zinc-400">Infinite Ammo</span>
               <button 
@@ -374,68 +304,22 @@ export default function Settings({ settings, onUpdate }: SettingsProps) {
             </div>
           </section>
 
-          <div className="space-y-6">
-            <section>
-              <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3 italic">Weapon Select</h3>
-              <div className="grid grid-cols-3 gap-2">
-                {(['PISTOL', 'AK47', 'AWP'] as const).map(w => (
-                  <button 
-                    key={w}
-                    onClick={() => onUpdate({ ...settings, popBots: { ...settings.popBots, weapon: w } })}
-                    className={`py-2 text-[10px] font-bold uppercase transition-all ${
-                      settings.popBots.weapon === w ? 'bg-white text-black' : 'bg-zinc-800 text-zinc-400 hover:bg-lime-400 hover:text-black'
-                    }`}
-                  >
-                    {w}
-                  </button>
-                ))}
-              </div>
-            </section>
-
-            <section>
-              <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3 italic">Bot Visuals</h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <span className="text-[10px] font-mono text-zinc-500 uppercase block">Body Color</span>
-                  <div className="flex flex-wrap gap-2 items-center">
-                    {['#3b82f6', '#ef4444', '#a3e635', '#fbbf24', '#ffffff'].map(c => (
-                      <button 
-                        key={c}
-                        onClick={() => onUpdate({ ...settings, map: { ...settings.map, botBodyColor: c } })}
-                        className={`w-6 h-6 transition-all ${settings.map.botBodyColor === c ? 'border-2 border-white scale-110' : 'opacity-50 hover:opacity-100'}`}
-                        style={{ backgroundColor: c }}
-                      />
-                    ))}
-                    <input 
-                      type="color"
-                      value={settings.map.botBodyColor}
-                      onChange={(e) => onUpdate({ ...settings, map: { ...settings.map, botBodyColor: e.target.value } })}
-                      className="w-6 h-6 p-0 border-0 bg-transparent cursor-pointer"
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <span className="text-[10px] font-mono text-zinc-500 uppercase block">Head Color</span>
-                  <div className="flex flex-wrap gap-2 items-center">
-                    {['#fbbf24', '#f472b6', '#22d3ee', '#ffffff', '#000000'].map(c => (
-                      <button 
-                        key={c}
-                        onClick={() => onUpdate({ ...settings, map: { ...settings.map, botHeadColor: c } })}
-                        className={`w-6 h-6 transition-all ${settings.map.botHeadColor === c ? 'border-2 border-white scale-110' : 'opacity-50 hover:opacity-100'}`}
-                        style={{ backgroundColor: c }}
-                      />
-                    ))}
-                    <input 
-                      type="color"
-                      value={settings.map.botHeadColor}
-                      onChange={(e) => onUpdate({ ...settings, map: { ...settings.map, botHeadColor: e.target.value } })}
-                      className="w-6 h-6 p-0 border-0 bg-transparent cursor-pointer"
-                    />
-                  </div>
-                </div>
-              </div>
-            </section>
-          </div>
+          <section>
+            <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3 italic">Weapon Select</h3>
+            <div className="grid grid-cols-3 gap-2">
+              {(['PISTOL', 'AK47', 'AWP'] as const).map(w => (
+                <button 
+                  key={w}
+                  onClick={() => onUpdate({ ...settings, popBots: { ...settings.popBots, weapon: w } })}
+                  className={`py-2 text-[10px] font-bold uppercase transition-all ${
+                    settings.popBots.weapon === w ? 'bg-white text-black' : 'bg-zinc-800 text-zinc-400 hover:bg-lime-400 hover:text-black'
+                  }`}
+                >
+                  {w}
+                </button>
+              ))}
+            </div>
+          </section>
         </div>
       )}
     </div>

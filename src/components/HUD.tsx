@@ -16,14 +16,14 @@ export default function HUD({ settings, crosshair, stats, mode, botsHitBack }: H
   return (
     <div className="absolute inset-0 pointer-events-none z-40 overflow-hidden">
       {/* Minimap: Top Right */}
-      {(mode === GameMode.MAP) && stats?.playerPos && (
+      {mode === GameMode.MAP && stats?.playerPos && (
         <div 
           className="absolute top-8 right-8"
           style={{ transform: `scale(${scale})`, transformOrigin: 'top right' }}
         >
           <div className="flex flex-col items-end gap-2">
             <div className="flex items-center gap-2 mb-1">
-              <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">{mode === GameMode.MAP ? 'Sector: B-Site' : 'Sector: Tactical-2v2'}</span>
+              <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">Sector: B-Site</span>
               <div className="w-1.5 h-1.5 rounded-full bg-lime-400 animate-pulse" />
             </div>
             <Minimap 
@@ -96,7 +96,7 @@ export default function HUD({ settings, crosshair, stats, mode, botsHitBack }: H
           className="absolute bottom-12 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2"
           style={{ transform: `translateX(-50%) scale(${scale})`, transformOrigin: 'bottom center' }}
         >
-          {stats.ammo !== undefined && (mode === GameMode.MAP) && (
+          {stats.ammo !== undefined && mode === GameMode.MAP && (
              <div className="flex flex-col items-center justify-center">
                 {stats.isReloading ? (
                    <div className="w-12 h-12 relative flex items-center justify-center">

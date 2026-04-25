@@ -1,8 +1,6 @@
 let audioContext: AudioContext | null = null;
 
 export const playSound = (type: 'fire' | 'click' | 'hit' | 'headshot' | 'kill' | 'success' | 'error') => {
-  if (typeof window === 'undefined') return;
-  
   if (!audioContext) {
     audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
   }

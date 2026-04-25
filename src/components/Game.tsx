@@ -7,10 +7,10 @@ import {
   ContactShadows,
 } from "@react-three/drei";
 import * as THREE from "three";
-import { playSound } from "../lib/audio";
-import { motion } from "motion/react";
-import { GameSettings, GameStats, GameMode, TargetData, Difficulty } from "../types";
 import confetti from "canvas-confetti";
+import { motion } from "motion/react";
+import { GameSettings, GameStats, GameMode, TargetData } from "../types";
+import { playSound } from "../lib/audio";
 
 // Map Elements defining visuals and collisions
 export const MAP_ELEMENTS = [
@@ -238,22 +238,18 @@ export default function Game({
       }
     };
 
-    if (typeof window !== "undefined") {
-      window.addEventListener("keydown", handleKeyDown);
-      window.addEventListener("keyup", handleKeyUp);
-      window.addEventListener("mousedown", handleMouseDown);
-      window.addEventListener("wheel", handleWheel);
-      const preventDefault = (e: MouseEvent) => e.preventDefault();
-      window.addEventListener("contextmenu", preventDefault as any);
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+    window.addEventListener("mousedown", handleMouseDown);
+    window.addEventListener("wheel", handleWheel);
+    window.addEventListener("contextmenu", (e) => e.preventDefault());
 
-      return () => {
-        window.removeEventListener("keydown", handleKeyDown);
-        window.removeEventListener("keyup", handleKeyUp);
-        window.removeEventListener("mousedown", handleMouseDown);
-        window.removeEventListener("wheel", handleWheel);
-        window.removeEventListener("contextmenu", preventDefault as any);
-      };
-    }
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+      window.removeEventListener("mousedown", handleMouseDown);
+      window.removeEventListener("wheel", handleWheel);
+    };
   }, [settings, isPaused, countdown, onUpdateSettings]);
 
   useEffect(() => {
@@ -291,12 +287,10 @@ export default function Game({
 
       if (settings.mode === GameMode.MAP && !settings.map.isStaticBots) {
         statsRef.current.timeRemaining += 1;
-        // End game when all enemy bots are eliminated
+        // End game when all target bots are eliminated, after initial spawn
         setTargets((currentTargets) => {
-          const enemiesLeft = currentTargets.length;
-
           if (
-            enemiesLeft === 0 &&
+            currentTargets.length === 0 &&
             statsRef.current.timeRemaining > 2 &&
             !gameStatus
           ) {
@@ -744,9 +738,7 @@ export default function Game({
           theme={settings.theme}
           themeColor={settings.themeColor}
           mode={settings.mode}
-          botBodyColor={settings.mode === GameMode.POP_BOTS ? settings.popBots.botBodyColor : settings.map.botBodyColor}
-          botHeadColor={settings.mode === GameMode.POP_BOTS ? settings.popBots.botHeadColor : settings.map.botHeadColor}
-          difficulty={settings.map.difficulty}
+          botColor={settings.popBots.botColor}
           keys={keys}
           playerVel={playerVel}
           botsHitBack={settings.map.botsHitBack}
@@ -1002,7 +994,7 @@ function StatsSyncer({
   const lastSync = useRef(0);
 
   useFrame(() => {
-    if (!active || (mode !== GameMode.MAP)) return;
+    if (!active || mode !== GameMode.MAP) return;
     
     // Sync every 50ms (20fps for minimap is plenty)
     if (Date.now() - lastSync.current > 50) {
@@ -1029,9 +1021,7 @@ function PhysicsWorld({
   theme,
   themeColor,
   mode,
-  botBodyColor,
-  botHeadColor,
-  difficulty,
+  botColor,
   keys,
   playerVel,
   botsHitBack,
@@ -1051,9 +1041,7 @@ function PhysicsWorld({
   theme: string;
   themeColor: string;
   mode: GameMode;
-  botBodyColor: string;
-  botHeadColor: string;
-  difficulty: Difficulty;
+  botColor: string;
   keys: React.MutableRefObject<{ [key: string]: boolean }>;
   playerVel: React.MutableRefObject<THREE.Vector3>;
   botsHitBack: boolean;
@@ -1066,7 +1054,6 @@ function PhysicsWorld({
 }) {
   const { camera, raycaster, scene } = useThree();
 
-  const lastUpdate = useRef(0);
   const targetFov = useRef(75);
 
   const [tracers, setTracers] = useState<
@@ -1107,14 +1094,12 @@ function PhysicsWorld({
       if (e.button === 0) isShootingRef.current = true;
     };
 
-    if (typeof window !== "undefined") {
-      window.addEventListener("mousedown", handleMouseDownLocal);
-      window.addEventListener("mouseup", handleMouseUp);
-      return () => {
-        window.removeEventListener("mousedown", handleMouseDownLocal);
-        window.removeEventListener("mouseup", handleMouseUp);
-      };
-    }
+    window.addEventListener("mousedown", handleMouseDownLocal);
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => {
+      window.removeEventListener("mousedown", handleMouseDownLocal);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
   }, []);
 
   const fireWeapon = useCallback(() => {
@@ -1163,13 +1148,13 @@ function PhysicsWorld({
     raycaster.setFromCamera(new THREE.Vector2(spreadX, spreadY), camera);
 
     let closestObstacleDist = weapon === "KNIFE" ? 2.5 : Infinity;
-    const boxes = MAP_COLLISION_BOXES;
-
-    for (const box of boxes) {
-      const intersectPoint = new THREE.Vector3();
-      if (raycaster.ray.intersectBox(box, intersectPoint)) {
-        const dist = raycaster.ray.origin.distanceTo(intersectPoint);
-        if (dist < closestObstacleDist) closestObstacleDist = dist;
+    if (mode === GameMode.MAP) {
+      for (const box of MAP_COLLISION_BOXES) {
+        const intersectPoint = new THREE.Vector3();
+        if (raycaster.ray.intersectBox(box, intersectPoint)) {
+          const dist = raycaster.ray.origin.distanceTo(intersectPoint);
+          if (dist < closestObstacleDist) closestObstacleDist = dist;
+        }
       }
     }
 
@@ -1277,7 +1262,7 @@ function PhysicsWorld({
       recoilIndex.current = 0;
     }
 
-    const moveSpeed = (mode === GameMode.MAP) ? 12 : 8;
+    const moveSpeed = mode === GameMode.MAP ? 12 : 8;
     const accel = 15;
 
     const input = new THREE.Vector3();
@@ -1353,11 +1338,9 @@ function PhysicsWorld({
       );
 
       let collidesY = false;
-      let highestFloorY = 1.8; 
+      let highestFloorY = 1.8; // Default ground level based on eye level
 
-      const collisionBoxes = MAP_COLLISION_BOXES;
-
-      for (const box of collisionBoxes) {
+      for (const box of MAP_COLLISION_BOXES) {
         if (playerBoxY.intersectsBox(box)) {
           if (
             playerVel.current.y <= 0 &&
@@ -1373,22 +1356,20 @@ function PhysicsWorld({
         }
       }
 
-      if (!collidesY) {
-        // Fallback ground floor
-        const floorLimit = 1.8;
-        if (nextY >= floorLimit) {
-           camera.position.y = nextY;
-        } else {
-           camera.position.y = floorLimit;
-           isOnGround = true;
-           playerVel.current.y = 0;
-        }
+      if (!collidesY && nextY >= 1.8) {
+        camera.position.y = nextY;
       } else {
         if (collidesY && playerVel.current.y <= 0) {
           camera.position.y = highestFloorY;
           isOnGround = true;
         }
         playerVel.current.y = 0;
+      }
+
+      // Ground check (as a hard fallback)
+      if (camera.position.y <= 1.81) {
+        camera.position.y = Math.max(1.8, camera.position.y);
+        isOnGround = true;
       }
 
       if (keys.current["Space"] && isOnGround) {
@@ -1414,8 +1395,7 @@ function PhysicsWorld({
       let collides = false;
       let stepUpHeight = 0;
 
-      const boxes = MAP_COLLISION_BOXES;
-      for (const mBox of boxes) {
+      for (const mBox of MAP_COLLISION_BOXES) {
         if (box.intersectsBox(mBox)) {
           const footY = camera.position.y - 1.8;
           // Check if we can step up (obstacle max Y is within 0.7 units above foot level)
@@ -1460,9 +1440,9 @@ function PhysicsWorld({
       camera.position.z = nextZ;
     }
 
-    // Hard Bounds
-    const limit = (mode === GameMode.MAP) ? 65 : 20;
-    const limitZ = (mode === GameMode.MAP) ? 65 : 20;
+    // Hard Bounds - SHRUNK for better density
+    const limit = mode === GameMode.MAP ? 55 : 20;
+    const limitZ = mode === GameMode.MAP ? 55 : 20;
     camera.position.x = Math.max(-limit, Math.min(limit, camera.position.x));
     camera.position.z = Math.max(-limitZ, Math.min(limitZ, camera.position.z));
   });
@@ -1477,10 +1457,8 @@ function PhysicsWorld({
   );
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      window.addEventListener("mousedown", handleClick);
-      return () => window.removeEventListener("mousedown", handleClick);
-    }
+    window.addEventListener("mousedown", handleClick);
+    return () => window.removeEventListener("mousedown", handleClick);
   }, [handleClick]);
 
   return (
@@ -1490,9 +1468,7 @@ function PhysicsWorld({
           <PlayerBot
             key={t.id}
             data={t}
-            botBodyColor={botBodyColor}
-            botHeadColor={botHeadColor}
-            difficulty={difficulty}
+            botColor={botColor}
             theme={theme}
             mode={mode}
             onShootPlayer={onDamage}
@@ -1785,9 +1761,7 @@ function PlayerShadow() {
 
 function PlayerBot({
   data,
-  botBodyColor,
-  botHeadColor,
-  difficulty,
+  botColor,
   theme,
   mode,
   onShootPlayer,
@@ -1796,9 +1770,7 @@ function PlayerBot({
   isStaticBots,
 }: {
   data: TargetData;
-  botBodyColor: string;
-  botHeadColor: string;
-  difficulty: Difficulty;
+  botColor: string;
   theme: string;
   mode?: GameMode;
   onShootPlayer?: (amount: number) => void;
@@ -1807,13 +1779,14 @@ function PlayerBot({
   isStaticBots?: boolean;
 }) {
   const meshRef = useRef<THREE.Group>(null);
-  const lookAtRef = useRef(new THREE.Object3D());
-  const { camera, scene } = useThree();
+  const initialPos = useRef<[number, number, number]>(data.position);
   const currentPosRef = useRef(new THREE.Vector3(...data.position));
-  const botVel = useRef(new THREE.Vector3(0, 0, 0));
+  const botVel = useRef(new THREE.Vector3());
   const initialized = useRef(false);
-  const nextShootTime = useRef(0);
+  const { camera } = useThree();
+  const nextShootTime = useRef(Date.now() + 2000 + Math.random() * 3000);
   const strafeOffset = useRef(Math.random() * Math.PI * 2);
+  const lookAtRef = useRef(new THREE.Object3D());
   const targetNavPoint = useRef<THREE.Vector3 | null>(null);
 
   useFrame((state, delta) => {
@@ -1822,147 +1795,227 @@ function PlayerBot({
     if (!initialized.current) {
       meshRef.current.position.set(...data.position);
       initialized.current = true;
+      // Assign initial random nav point
       const NAV_POINTS = [
-            new THREE.Vector3(30, 1, -30),
-            new THREE.Vector3(45, 1, -10),
-            new THREE.Vector3(5, 1, 0),
-            new THREE.Vector3(0, 1, 40),
-            new THREE.Vector3(-35, 1, -30),
-            new THREE.Vector3(-35, 1, 10),
-            new THREE.Vector3(0, 1, -20),
-          ];
+        new THREE.Vector3(30, 1, -30),
+        new THREE.Vector3(45, 1, -10),
+        new THREE.Vector3(5, 1, 0),
+        new THREE.Vector3(0, 1, 40),
+        new THREE.Vector3(-35, 1, -30),
+        new THREE.Vector3(-35, 1, 10),
+        new THREE.Vector3(0, 1, -20),
+      ];
       targetNavPoint.current =
         NAV_POINTS[Math.floor(Math.random() * NAV_POINTS.length)].clone();
     }
 
+    // Movement bobbing (vertical oscillation)
     const bob = Math.sin(state.clock.elapsedTime * 6) * 0.03;
-    const distToPlayer = currentPosRef.current.distanceTo(camera.position);
-    let isVisible = false;
 
-    // Difficulty based vision distance
-    let visionRange = 80;
-    if (difficulty === "EASY") visionRange = 35;
-    if (difficulty === "HARD") visionRange = 140;
+    if (mode === GameMode.MAP && !isStaticBots) {
+      const distToPlayer = currentPosRef.current.distanceTo(camera.position);
+      let isVisible = false;
 
-    if (distToPlayer < visionRange) {
-      const eyePos = currentPosRef.current.clone();
-      eyePos.y += 1.0;
-      const dirToPlayer = new THREE.Vector3().subVectors(camera.position, eyePos).normalize();
-      const ray = new THREE.Ray(eyePos, dirToPlayer);
-      let occluded = false;
-      const distToEye = eyePos.distanceTo(camera.position);
+      // Line of sight check using Map Collision Boxes
+      if (distToPlayer < 80) {
+        const eyePos = currentPosRef.current.clone();
+        eyePos.y += 1.0; // Bot eye level
+        
+        const dirToPlayer = new THREE.Vector3()
+          .subVectors(camera.position, eyePos)
+          .normalize();
+          
+        const ray = new THREE.Ray(eyePos, dirToPlayer);
+        let occluded = false;
 
-      const collisionBoxes = MAP_COLLISION_BOXES;
+        const distToEye = eyePos.distanceTo(camera.position);
 
-      for (const box of collisionBoxes) {
-        const target = new THREE.Vector3();
-        if (ray.intersectBox(box, target)) {
-          if (eyePos.distanceTo(target) < distToEye - 1.0) {
-            occluded = true;
-            break;
+        for (const box of MAP_COLLISION_BOXES) {
+          const target = new THREE.Vector3();
+          if (ray.intersectBox(box, target)) {
+            // Check if intersection distance is less than distance to player
+            if (eyePos.distanceTo(target) < distToEye - 1.0) {
+              occluded = true;
+              break;
+            }
+          }
+        }
+        if (!occluded) isVisible = true;
+      }
+
+      const nextPos = currentPosRef.current.clone();
+
+      if (isVisible) {
+        // Look at player
+        lookAtRef.current.position.set(
+          currentPosRef.current.x,
+          currentPosRef.current.y,
+          currentPosRef.current.z,
+        );
+        lookAtRef.current.lookAt(
+          camera.position.x,
+          currentPosRef.current.y,
+          camera.position.z,
+        );
+        meshRef.current.quaternion.slerp(
+          lookAtRef.current.quaternion,
+          delta * 5,
+        );
+
+        if (distToPlayer > 18 && !isStaticBots) {
+          const dir = new THREE.Vector3()
+            .subVectors(camera.position, currentPosRef.current)
+            .setY(0)
+            .normalize();
+          nextPos.addScaledVector(dir, delta * 3.5);
+        }
+
+        // Smooth Strafe Logic
+        if (!isStaticBots) {
+          const strafeSpeed = 1.5;
+          const strafeWidth = 4;
+          const strafeDir = new THREE.Vector3(1, 0, 0).applyQuaternion(
+            meshRef.current.quaternion,
+          );
+          const oscillation = Math.sin(
+            state.clock.elapsedTime * strafeSpeed + strafeOffset.current,
+          );
+          nextPos.addScaledVector(strafeDir, oscillation * delta * strafeWidth);
+        }
+      } else if (!isStaticBots) {
+        // Patrol to targetNavPoint
+        if (targetNavPoint.current) {
+          const distToNav = currentPosRef.current.distanceTo(
+            targetNavPoint.current,
+          );
+          if (distToNav < 3) {
+            // Pick new nav point
+            const NAV_POINTS = [
+              new THREE.Vector3(30, 1, -30),
+              new THREE.Vector3(45, 1, -10),
+              new THREE.Vector3(5, 1, 0),
+              new THREE.Vector3(0, 1, 40),
+              new THREE.Vector3(-35, 1, -30),
+              new THREE.Vector3(-35, 1, 10),
+              new THREE.Vector3(0, 1, -20),
+            ];
+            targetNavPoint.current =
+              NAV_POINTS[Math.floor(Math.random() * NAV_POINTS.length)].clone();
+          } else {
+            lookAtRef.current.position.set(
+              currentPosRef.current.x,
+              currentPosRef.current.y,
+              currentPosRef.current.z,
+            );
+            lookAtRef.current.lookAt(
+              targetNavPoint.current.x,
+              currentPosRef.current.y,
+              targetNavPoint.current.z,
+            );
+            meshRef.current.quaternion.slerp(
+              lookAtRef.current.quaternion,
+              delta * 3,
+            );
+
+            const dir = new THREE.Vector3()
+              .subVectors(targetNavPoint.current, currentPosRef.current)
+              .setY(0)
+              .normalize();
+            nextPos.addScaledVector(dir, delta * 5); // run to point
           }
         }
       }
-      if (!occluded) {
-        isVisible = true;
-      }
-    }
 
-    const nextPos = currentPosRef.current.clone();
+      // Simple Gravity
+      const gravity = -30;
+      botVel.current.y += gravity * delta;
 
-    if (isVisible) {
-      lookAtRef.current.position.set(currentPosRef.current.x, currentPosRef.current.y, currentPosRef.current.z);
-      lookAtRef.current.lookAt(camera.position.x, currentPosRef.current.y, camera.position.z);
-      meshRef.current.quaternion.slerp(lookAtRef.current.quaternion, delta * 5);
+      // Map Bounds for Bots
+      nextPos.x = Math.max(-52, Math.min(52, nextPos.x));
+      nextPos.z = Math.max(-52, Math.min(52, nextPos.z));
 
-      if (distToPlayer > 18 && !isStaticBots) {
-        const dir = new THREE.Vector3().subVectors(camera.position, currentPosRef.current).setY(0).normalize();
-        nextPos.addScaledVector(dir, delta * 3.5);
-      }
+      // Bot-specific collision detection
+      const checkBotCollision = (pos: THREE.Vector3) => {
+        const botBox = new THREE.Box3().setFromCenterAndSize(
+          new THREE.Vector3(pos.x, pos.y + 1.2, pos.z), // Center at waist level
+          new THREE.Vector3(1.0, 2.4, 1.0),
+        );
+        for (const box of MAP_COLLISION_BOXES) {
+          if (botBox.intersectsBox(box)) return true;
+        }
+        return false;
+      };
 
-      if (!isStaticBots) {
-        const strafeDir = new THREE.Vector3(1, 0, 0).applyQuaternion(meshRef.current.quaternion);
-        const oscillation = Math.sin(state.clock.elapsedTime * 1.5 + strafeOffset.current);
-        nextPos.addScaledVector(strafeDir, oscillation * delta * 4);
-      }
-    } else if (!isStaticBots && targetNavPoint.current) {
-      const distToNav = currentPosRef.current.distanceTo(targetNavPoint.current);
-      if (distToNav < 3) {
-        const NAV_POINTS = [
-          new THREE.Vector3(30, 1, -30),
-          new THREE.Vector3(45, 1, -10),
-          new THREE.Vector3(5, 1, 0),
-          new THREE.Vector3(0, 1, 40),
-          new THREE.Vector3(-35, 1, -30),
-          new THREE.Vector3(-35, 1, 10),
-          new THREE.Vector3(0, 1, -20),
-        ];
-        targetNavPoint.current = NAV_POINTS[Math.floor(Math.random() * NAV_POINTS.length)].clone();
+      // Gravitational fall with collision
+      const yOnly = currentPosRef.current.clone();
+      nextPos.y += botVel.current.y * delta;
+      yOnly.y = nextPos.y;
+
+      if (checkBotCollision(yOnly)) {
+        // Hit the floor/obstacle, stop falling
+        nextPos.y = currentPosRef.current.y;
+        botVel.current.y = 0;
       } else {
-        lookAtRef.current.position.set(currentPosRef.current.x, currentPosRef.current.y, currentPosRef.current.z);
-        lookAtRef.current.lookAt(targetNavPoint.current.x, currentPosRef.current.y, targetNavPoint.current.z);
-        meshRef.current.quaternion.slerp(lookAtRef.current.quaternion, delta * 3);
-        const dir = new THREE.Vector3().subVectors(targetNavPoint.current, currentPosRef.current).setY(0).normalize();
-        nextPos.addScaledVector(dir, delta * 5);
+        currentPosRef.current.y = nextPos.y;
       }
-    }
 
-    botVel.current.y += -30 * delta;
-    const posLimit = 52;
-    nextPos.x = Math.max(-posLimit, Math.min(posLimit, nextPos.x));
-    nextPos.z = Math.max(-posLimit, Math.min(posLimit, nextPos.z));
+      // Base floor clamp
+      const minFloorY = mode === GameMode.MAP ? 0 : -1;
+      if (currentPosRef.current.y < minFloorY) {
+        currentPosRef.current.y = minFloorY;
+        botVel.current.y = 0;
+      }
 
-    const checkBotCollision = (pos: THREE.Vector3) => {
-      const botBox = new THREE.Box3().setFromCenterAndSize(new THREE.Vector3(pos.x, pos.y + 1.2, pos.z), new THREE.Vector3(1.0, 2.4, 1.0));
-      const boxes = MAP_COLLISION_BOXES;
-      for (const box of boxes) if (botBox.intersectsBox(box)) return true;
-      return false;
-    };
+      // Apply movement with collision checks
+      const xOnly = currentPosRef.current.clone();
+      xOnly.x = nextPos.x;
+      if (!checkBotCollision(xOnly)) currentPosRef.current.x = nextPos.x;
 
-    const yOnly = currentPosRef.current.clone();
-    nextPos.y += botVel.current.y * delta;
-    yOnly.y = nextPos.y;
-    if (checkBotCollision(yOnly)) {
-      nextPos.y = currentPosRef.current.y;
-      botVel.current.y = 0;
-    } else {
-      currentPosRef.current.y = nextPos.y;
-    }
+      const zOnly = currentPosRef.current.clone();
+      zOnly.z = nextPos.z;
+      if (!checkBotCollision(zOnly)) currentPosRef.current.z = nextPos.z;
 
-    if (mode === GameMode.MAP) {
-      currentPosRef.current.y = 0;
-      botVel.current.y = 0;
-    }
+      meshRef.current.position.set(
+        currentPosRef.current.x,
+        currentPosRef.current.y + bob,
+        currentPosRef.current.z,
+      );
 
-    const xOnly = currentPosRef.current.clone();
-    xOnly.x = nextPos.x;
-    if (!checkBotCollision(xOnly)) currentPosRef.current.x = nextPos.x;
-    const zOnly = currentPosRef.current.clone();
-    zOnly.z = nextPos.z;
-    if (!checkBotCollision(zOnly)) currentPosRef.current.z = nextPos.z;
-
-    meshRef.current.position.set(currentPosRef.current.x, currentPosRef.current.y + bob, currentPosRef.current.z);
-
-    if (botsHitBack && Date.now() > nextShootTime.current) {
-      if (isVisible && distToPlayer < visionRange) {
-        const damage = difficulty === "HARD" ? 35 : 20;
-        onShootPlayer?.(damage);
-        const delay = difficulty === "HARD" ? 800 + Math.random() * 800 : difficulty === "EASY" ? 2000 + Math.random() * 2500 : 1500 + Math.random() * 2000;
-        nextShootTime.current = Date.now() + delay;
+      // Shoot player
+      if (botsHitBack && Date.now() > nextShootTime.current) {
+        if (isVisible && distToPlayer < 80) {
+          onShootPlayer?.(20);
+          nextShootTime.current = Date.now() + 1500 + Math.random() * 2000;
+        }
       }
     }
   });
 
   return (
     <group ref={meshRef}>
-      <mesh position={[0, 0.7, 0]} name="target" userData={{ id: data.id }} castShadow>
+      {/* Torso */}
+      <mesh
+        position={[0, 0.7, 0]}
+        name="target"
+        userData={{ id: data.id }}
+        castShadow
+      >
         <boxGeometry args={[0.7, 1.4, 0.3]} />
-        <meshStandardMaterial color={botBodyColor} />
+        <meshStandardMaterial color="#222" />
       </mesh>
-      <mesh position={[0, 1.65, 0]} name="bot-head" userData={{ id: data.id }} castShadow>
+
+      {/* Head */}
+      <mesh
+        position={[0, 1.65, 0]}
+        name="bot-head"
+        userData={{ id: data.id }}
+        castShadow
+      >
         <boxGeometry args={[0.5, 0.5, 0.5]} />
-        <meshStandardMaterial color={botHeadColor} />
+        <meshStandardMaterial color={botColor} />
       </mesh>
+
+      {/* Arms */}
       <mesh position={[0.45, 0.9, 0]} castShadow>
         <boxGeometry args={[0.2, 1.2, 0.2]} />
         <meshStandardMaterial color="#333" />
@@ -1971,13 +2024,15 @@ function PlayerBot({
         <boxGeometry args={[0.2, 1.2, 0.2]} />
         <meshStandardMaterial color="#333" />
       </mesh>
-      {/* Bot Weapon - Point towards +Z (Front) */}
-      <group position={[0.3, 0.9, 0.4]}>
-        <mesh position={[0, -0.1, -0.2]}>
+      {/* Bot Weapon */}
+      <group position={[0.3, 0.9, -0.4]}>
+        {/* Gun body */}
+        <mesh position={[0, -0.1, 0.2]}>
           <boxGeometry args={[0.08, 0.15, 0.5]} />
           <meshStandardMaterial color="#1a1a1a" />
         </mesh>
-        <mesh position={[0, -0.05, 0.2]} rotation={[Math.PI / 2, 0, 0]}>
+        {/* Barrel */}
+        <mesh position={[0, -0.05, -0.2]} rotation={[Math.PI / 2, 0, 0]}>
           <cylinderGeometry args={[0.03, 0.03, 0.6, 8]} />
           <meshStandardMaterial color="#111" />
         </mesh>
