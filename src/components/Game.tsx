@@ -106,9 +106,11 @@ export default function Game({ settings, onEnd, onUpdateStats, isPaused }: GameP
         clearInterval(interval);
         startSession();
         // Request pointer lock when game starts
-        setTimeout(() => {
-          document.body.requestPointerLock?.();
-        }, 100);
+        if (settings.mode !== GameMode.REACTION) {
+          setTimeout(() => {
+            document.body.requestPointerLock?.();
+          }, 100);
+        }
       } else {
         setCountdown(count);
       }
@@ -345,10 +347,15 @@ export default function Game({ settings, onEnd, onUpdateStats, isPaused }: GameP
   };
 
   if (settings.mode === GameMode.REACTION) {
+    const customCursor = `url("data:image/svg+xml,%3Csvg width='32' height='32' viewBox='0 0 32 32' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='16' cy='16' r='14' stroke='${encodeURIComponent(settings.themeColor)}' stroke-width='2' fill='none' /%3E%3Ccircle cx='16' cy='16' r='4' fill='${encodeURIComponent(settings.themeColor)}' /%3E%3C/svg%3E") 16 16, crosshair`;
+
     return (
-      <div className="w-full h-full flex items-center justify-center p-8 bg-zinc-950">
+      <div 
+        className="w-full h-full flex items-center justify-center p-8 bg-zinc-950 relative"
+        style={{ cursor: customCursor }}
+      >
         <ReactionTest 
-          isPaused={isPaused} 
+          isPaused={isPaused || countdown !== null} 
           onResult={(time) => {
             statsRef.current.hits += 1;
             statsRef.current.score += Math.max(0, 1000 - time);
@@ -362,6 +369,21 @@ export default function Game({ settings, onEnd, onUpdateStats, isPaused }: GameP
             onUpdateStats({ ...statsRef.current });
           }}
         />
+
+        {countdown !== null && (
+          <div className="absolute inset-0 flex items-center justify-center z-50 pointer-events-none">
+            <motion.div 
+              key={countdown}
+              initial={{ scale: 2, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0, opacity: 0 }}
+              className="text-[200px] font-black italic tracking-tighter"
+              style={{ color: settings.themeColor, textShadow: `0 0 40px ${settings.themeColor}40` }}
+            >
+              {countdown}
+            </motion.div>
+          </div>
+        )}
       </div>
     );
   }
@@ -516,7 +538,7 @@ function ReactionTest({ isPaused, onResult, onEarlyClick }: { isPaused: boolean,
     return (
         <div 
             onClick={handleBoxClick}
-            className={`w-full max-w-2xl aspect-video flex flex-col items-center justify-center cursor-pointer transition-colors duration-200 border-4 ${
+            className={`w-full max-w-2xl aspect-video flex flex-col items-center justify-center transition-colors duration-200 border-4 ${
                 state === 'WAITING' ? 'bg-red-950 border-red-500' : 
                 state === 'READY' ? 'bg-lime-950 border-lime-500' : 
                 state === 'EARLY' ? 'bg-zinc-900 border-orange-500' :

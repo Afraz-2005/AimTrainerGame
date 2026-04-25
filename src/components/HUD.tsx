@@ -1,21 +1,24 @@
-import { CrosshairSettings, HUDSettings, GameStats } from '../types';
+import { CrosshairSettings, HUDSettings, GameStats, GameMode } from '../types';
 
 interface HUDProps {
   settings: HUDSettings;
   crosshair: CrosshairSettings;
   stats: GameStats | null;
+  mode?: GameMode;
 }
 
-export default function HUD({ settings, crosshair, stats }: HUDProps) {
+export default function HUD({ settings, crosshair, stats, mode }: HUDProps) {
   const scale = settings.scale || 1;
   const hudColor = settings.color || '#a3e635';
 
   return (
     <div className="absolute inset-0 pointer-events-none z-40 overflow-hidden">
       {/* Target Logic & Crosshair */}
-      <div className="absolute inset-0 flex items-center justify-center">
-        <CrosshairRenderer settings={crosshair} />
-      </div>
+      {mode !== GameMode.REACTION && (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <CrosshairRenderer settings={crosshair} />
+        </div>
+      )}
 
       {/* Top Left: FPS & Server Info */}
       <div 

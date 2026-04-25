@@ -191,6 +191,7 @@ export default function App() {
               settings={settings.hud} 
               crosshair={settings.crosshair}
               stats={currentStats}
+              mode={settings.mode}
             />
             
             <AnimatePresence>
