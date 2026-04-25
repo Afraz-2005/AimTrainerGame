@@ -95,7 +95,7 @@ export default function App() {
             <header className="flex justify-between items-end mb-12">
               <div>
                 <h1 className="text-[120px] leading-[0.8] font-black tracking-tighter italic uppercase select-none" style={{ color: settings.themeColor }}>
-                  VOXEL<br /><span className="text-white">AIM</span>
+                  VOXEL <span className="text-white">AIM</span>
                 </h1>
                 <p className="mt-4 text-zinc-500 font-mono tracking-widest text-sm uppercase">Performance Aiming Environment v2.0</p>
               </div>
