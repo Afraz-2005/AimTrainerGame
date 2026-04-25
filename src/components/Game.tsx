@@ -155,6 +155,7 @@ export default function Game({ settings, onEnd, onUpdateStats, isPaused }: GameP
       count = 1;
     }
     if (settings.mode === GameMode.MAP) count = 4;
+    if (settings.mode === GameMode.REACTION) count = 0; // REACTION starts with 0 targets
 
     const newTargets: TargetData[] = [];
     const usedIndices = new Set<number>();
@@ -221,6 +222,8 @@ export default function Game({ settings, onEnd, onUpdateStats, isPaused }: GameP
               safetyAttempts++;
             }
         }
+    } else if (mode === GameMode.REACTION) {
+        position = [0, 2, -15]; // Fixed center position for reaction test
     } else {
         position = [
             (Math.random() - 0.5) * rangeX,
@@ -298,7 +301,7 @@ export default function Game({ settings, onEnd, onUpdateStats, isPaused }: GameP
             const usedIndices = new Set(remaining.map(t => t.spawnIndex).filter((idx): idx is number => idx !== undefined));
             
             // Success burst every 50 kills
-            if (statsRef.current.hits % 50 === 0) {
+            if (statsRef.current.hits % 50 === 0 && settings.mode !== GameMode.REACTION) {
                 confetti({
                     particleCount: 100,
                     spread: 70,
@@ -340,6 +343,28 @@ export default function Game({ settings, onEnd, onUpdateStats, isPaused }: GameP
     const total = statsRef.current.hits + statsRef.current.misses;
     statsRef.current.accuracy = total > 0 ? (statsRef.current.hits / total) * 100 : 0;
   };
+
+  if (settings.mode === GameMode.REACTION) {
+    return (
+      <div className="w-full h-full flex items-center justify-center p-8 bg-zinc-950">
+        <ReactionTest 
+          isPaused={isPaused} 
+          onResult={(time) => {
+            statsRef.current.hits += 1;
+            statsRef.current.score += Math.max(0, 1000 - time);
+            statsRef.current.lastReactionTime = time;
+            updateAccuracy();
+            onUpdateStats({ ...statsRef.current });
+          }}
+          onEarlyClick={() => {
+            statsRef.current.misses += 1;
+            updateAccuracy();
+            onUpdateStats({ ...statsRef.current });
+          }}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="w-full h-full cursor-crosshair">
@@ -439,8 +464,99 @@ export default function Game({ settings, onEnd, onUpdateStats, isPaused }: GameP
           </motion.div>
         </div>
       )}
+
     </div>
   );
+}
+
+function ReactionTest({ isPaused, onResult, onEarlyClick }: { isPaused: boolean, onResult: (time: number) => void, onEarlyClick: () => void }) {
+    const [state, setState] = useState<'WAITING' | 'READY' | 'CLICKED' | 'EARLY'>('WAITING');
+    const [time, setTime] = useState<number | null>(null);
+    const timerRef = useRef<NodeJS.Timeout | null>(null);
+    const startTimestamp = useRef<number>(0);
+
+    const startTest = useCallback(() => {
+        setState('WAITING');
+        const delay = 1500 + Math.random() * 3500;
+        if (timerRef.current) clearTimeout(timerRef.current);
+        timerRef.current = setTimeout(() => {
+            setState('READY');
+            startTimestamp.current = Date.now();
+        }, delay);
+    }, []);
+
+    useEffect(() => {
+        if (!isPaused) {
+            startTest();
+        }
+        return () => {
+            if (timerRef.current) clearTimeout(timerRef.current);
+        };
+    }, [isPaused, startTest]);
+
+    const handleBoxClick = () => {
+        if (isPaused) return;
+
+        if (state === 'WAITING') {
+            if (timerRef.current) clearTimeout(timerRef.current);
+            setState('EARLY');
+            onEarlyClick();
+            playSound('click');
+        } else if (state === 'READY') {
+            const reactionTime = Date.now() - startTimestamp.current;
+            setTime(reactionTime);
+            setState('CLICKED');
+            onResult(reactionTime);
+            playSound('hit');
+        } else if (state === 'CLICKED' || state === 'EARLY') {
+            startTest();
+        }
+    };
+
+    return (
+        <div 
+            onClick={handleBoxClick}
+            className={`w-full max-w-2xl aspect-video flex flex-col items-center justify-center cursor-pointer transition-colors duration-200 border-4 ${
+                state === 'WAITING' ? 'bg-red-950 border-red-500' : 
+                state === 'READY' ? 'bg-lime-950 border-lime-500' : 
+                state === 'EARLY' ? 'bg-zinc-900 border-orange-500' :
+                'bg-zinc-900 border-zinc-700'
+            }`}
+        >
+            <motion.div
+                key={state}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="text-center"
+            >
+                {state === 'WAITING' && (
+                    <>
+                        <h2 className="text-4xl font-black italic text-red-500 tracking-tighter mb-2 uppercase">Protocol: Wait</h2>
+                        <p className="text-zinc-500 font-mono text-xs uppercase tracking-widest">Wait for visual trigger signal</p>
+                    </>
+                )}
+                {state === 'READY' && (
+                    <>
+                        <h2 className="text-6xl font-black italic text-lime-400 tracking-tighter mb-2 uppercase">Trigger Active</h2>
+                        <p className="text-lime-200/50 font-mono text-sm font-bold uppercase tracking-widest animate-pulse">Engage Target Now</p>
+                    </>
+                )}
+                {state === 'CLICKED' && (
+                    <>
+                        <h2 className="text-5xl font-black italic text-white tracking-tighter mb-2 uppercase">Recorded: {time}ms</h2>
+                        <p className="text-zinc-400 font-mono text-xs uppercase tracking-widest">Click to initiate next calibrate cycle</p>
+                    </>
+                )}
+                {state === 'EARLY' && (
+                    <>
+                        <h2 className="text-4xl font-black italic text-orange-500 tracking-tighter mb-2 uppercase">Jump Correction</h2>
+                        <p className="text-zinc-500 font-mono text-xs uppercase tracking-widest">Early engagement detected. Resetting...</p>
+                        <p className="text-zinc-600 font-mono text-[10px] mt-4 uppercase">Click to restart calibration</p>
+                    </>
+                )}
+            </motion.div>
+        </div>
+    );
 }
 
 function PhysicsWorld({ targets, onHit, onMiss, onDamage, isPaused, countdown, theme, themeColor, mode, botColor, keys, playerVel, botsHitBack, isScoped, weapon }: { 

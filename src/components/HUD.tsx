@@ -28,7 +28,11 @@ export default function HUD({ settings, crosshair, stats }: HUDProps) {
         </div>
         {settings.showFPS && (
           <div className="text-zinc-500 font-mono text-[10px] bg-zinc-900 px-2 py-1 border border-zinc-800">
-            FPS: <span className="text-white">144</span> | LATENCY: <span className="text-white">0ms</span>
+            FPS: <span className="text-white">144</span> | {stats?.lastReactionTime ? (
+              <>LATENCY: <span className="text-lime-400">{stats.lastReactionTime}ms</span></>
+            ) : (
+              <>LATENCY: <span className="text-white">0ms</span></>
+            )}
           </div>
         )}
       </div>

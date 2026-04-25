@@ -10,6 +10,7 @@ export enum GameMode {
   TRACKING = 'TRACKING',
   POP_BOTS = 'POP_BOTS',
   MAP = 'MAP',
+  REACTION = 'REACTION',
 }
 
 export type WeaponType = 'PISTOL' | 'AK47' | 'AWP';
@@ -63,6 +64,7 @@ export interface GameStats {
   accuracy: number;
   timeRemaining: number;
   health?: number;
+  lastReactionTime?: number;
 }
 
 export interface TargetData {

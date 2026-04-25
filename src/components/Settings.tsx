@@ -222,6 +222,33 @@ export default function Settings({ settings, onUpdate }: SettingsProps) {
         </div>
       )}
 
+      {settings.mode === 'REACTION' && (
+        <div className="col-span-full border-t border-zinc-800 pt-6 mt-6">
+          <section className="bg-zinc-900/50 p-6 border border-zinc-800">
+            <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-4 italic">Reaction Test Protocol</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+              <div className="space-y-3">
+                <p className="text-xs text-zinc-400 leading-relaxed font-mono">
+                  &gt; STATUS: CALIBRATING<br />
+                  &gt; OBJECTIVE: NEUTRALISE VOXEL TARGET UPON EMERGENCE<br />
+                  &gt; METRIC: RESPONSE LATENCY (MS)
+                </p>
+                <div className="flex gap-2">
+                   <div className="px-3 py-1 bg-zinc-800 text-[10px] text-zinc-500 font-bold uppercase">Center Spawn Only</div>
+                   <div className="px-3 py-1 bg-zinc-800 text-[10px] text-zinc-500 font-bold uppercase">Random Interval</div>
+                </div>
+              </div>
+              <div className="p-4 border border-dashed border-zinc-700 bg-black/40">
+                <p className="text-[10px] text-zinc-500 leading-relaxed italic">
+                  Training Note: This mode measures raw neuro-mechanical response. Focus on the center. 
+                  Wait for the snap-appearance. Scores are mapped to 1000 - latency.
+                </p>
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
+
       {settings.mode === 'MAP' && (
         <div className="col-span-full border-t border-zinc-800 pt-6 mt-6 grid grid-cols-1 md:grid-cols-2 gap-8">
           <section>

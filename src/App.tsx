@@ -136,6 +136,13 @@ export default function App() {
                     themeColor={settings.themeColor}
                     onClick={() => setSettings({ ...settings, mode: GameMode.MAP })} 
                   />
+                  <GameModeCard 
+                    title="Reaction" 
+                    highScore="165ms"
+                    isActive={settings.mode === GameMode.REACTION}
+                    themeColor={settings.themeColor}
+                    onClick={() => setSettings({ ...settings, mode: GameMode.REACTION })} 
+                  />
                 </div>
                 
                 <button
