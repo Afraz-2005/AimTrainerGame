@@ -396,10 +396,12 @@ function CameraSync({
   countdown,
   mode,
   botsHitBack,
+  playerBaseY,
 }: {
   countdown: number | null;
   mode?: GameMode;
   botsHitBack?: boolean;
+  playerBaseY: React.MutableRefObject<number>;
 }) {
   const { camera } = useThree();
   const resetDone = useRef(false);
@@ -409,21 +411,24 @@ function CameraSync({
       if (mode === GameMode.MAP) {
         if (botsHitBack) {
           camera.position.set(45, 6, 45); // Smaller map spawn
+          playerBaseY.current = 6;
           camera.rotation.set(0, Math.PI * 1.25, 0); // Look at center
         } else {
           camera.position.set(-37.5, 6, 22); // Orig map spawn above tunnels
+          playerBaseY.current = 6;
           camera.rotation.set(0, 0, 0); // Face towards the tunnel exit (negative Z)
         }
       } else {
         // Force looking straight ahead at the target zone
         camera.rotation.set(0, 0, 0);
         camera.position.set(0, 1.8, 0);
+        playerBaseY.current = 0;
       }
       resetDone.current = true;
     } else if (countdown === null) {
       resetDone.current = false;
     }
-  }, [countdown, camera, mode, botsHitBack]);
+  }, [countdown, camera, mode, botsHitBack, playerBaseY]);
 
   return null;
 }
@@ -440,6 +445,7 @@ export default function Game({
   const [isScoped, setIsScoped] = useState(false);
   const [gameStatus, setGameStatus] = useState<'victory' | 'loss' | null>(null);
   const crouchAmount = useRef(0);
+  const playerBaseY = useRef(0);
   const playerVel = useRef(new THREE.Vector3());
   const recoilIndex = useRef(0);
   const keys = useRef<{ [key: string]: boolean }>({});
@@ -1016,6 +1022,7 @@ export default function Game({
           countdown={countdown} 
           mode={settings.mode} 
           botsHitBack={settings.map?.botsHitBack} 
+          playerBaseY={playerBaseY}
         />
         {settings.mode === GameMode.MAP ? (
           <>
@@ -1090,6 +1097,7 @@ export default function Game({
           recoilIndex={recoilIndex}
           difficulty={settings.mode === GameMode.MAP ? settings.map.difficulty : settings.popBots.difficulty}
           crouchAmount={crouchAmount}
+          playerBaseY={playerBaseY}
         />
 
         <StatsSyncer 
@@ -1397,6 +1405,7 @@ function PhysicsWorld({
   recoilIndex,
   difficulty,
   crouchAmount,
+  playerBaseY,
 }: {
   targets: TargetData[];
   onHit: (id: string, isHeadshot: boolean) => void;
@@ -1419,10 +1428,23 @@ function PhysicsWorld({
   recoilIndex: React.MutableRefObject<number>;
   difficulty?: string;
   crouchAmount: React.MutableRefObject<number>;
+  playerBaseY: React.MutableRefObject<number>;
 }) {
   const { camera, raycaster, scene } = useThree();
 
   const targetFov = useRef(75);
+  const initialized = useRef(false);
+
+  useEffect(() => {
+    if (countdown === 3) {
+      initialized.current = false;
+    }
+  }, [countdown]);
+
+  if (!initialized.current && countdown === null && mode === GameMode.MAP) {
+    playerBaseY.current = camera.position.y - 1.8;
+    initialized.current = true;
+  }
 
   const [tracers, setTracers] = useState<
     { id: string; start: THREE.Vector3; end: THREE.Vector3 }[]
@@ -1625,24 +1647,26 @@ function PhysicsWorld({
       }
     }
 
-    if (
-      isPaused ||
-      countdown !== null ||
-      (mode !== GameMode.POP_BOTS && mode !== GameMode.MAP)
-    )
-      return;
+    if (mode === GameMode.REACTION) return;
 
-    if (weapon === "AK47") {
-      if (isShootingRef.current) {
-        if (Date.now() > nextShootTime.current) {
-          fireWeapon();
-          nextShootTime.current = Date.now() + 100; // 600 RPM
+    if (isPaused) return;
+
+    // Move combat-blocking return later
+    const isCombatBlocked = countdown !== null;
+
+    if (!isCombatBlocked) {
+      if (weapon === "AK47") {
+        if (isShootingRef.current) {
+          if (Date.now() > nextShootTime.current) {
+            fireWeapon();
+            nextShootTime.current = Date.now() + 100; // 600 RPM
+          }
+        } else {
+          recoilIndex.current = Math.max(0, recoilIndex.current - delta * 15);
         }
       } else {
         recoilIndex.current = Math.max(0, recoilIndex.current - delta * 15);
       }
-    } else {
-      recoilIndex.current = Math.max(0, recoilIndex.current - delta * 15);
     }
 
     const isCrouching = keys.current["ControlLeft"] || keys.current["KeyC"];
@@ -1660,10 +1684,14 @@ function PhysicsWorld({
     const accel = 15;
 
     const input = new THREE.Vector3();
-    if (keys.current["KeyW"]) input.z -= 1;
-    if (keys.current["KeyS"]) input.z += 1;
-    if (keys.current["KeyA"]) input.x -= 1;
-    if (keys.current["KeyD"]) input.x += 1;
+    const canMove = mode !== GameMode.GRIDSHOT && mode !== GameMode.SIXSHOT;
+
+    if (canMove) {
+      if (keys.current["KeyW"]) input.z -= 1;
+      if (keys.current["KeyS"]) input.z += 1;
+      if (keys.current["KeyA"]) input.x -= 1;
+      if (keys.current["KeyD"]) input.x += 1;
+    }
 
     if (input.length() > 0) {
       input.normalize();
@@ -1724,58 +1752,48 @@ function PhysicsWorld({
     
     if (mode === GameMode.MAP) {
       playerVel.current.y += gravity * delta;
-
-      let nextY = camera.position.y + playerVel.current.y * delta;
+      let nextBaseY = playerBaseY.current + playerVel.current.y * delta;
 
       // Vertical Collision Check
+      const playerBoxHeight = eyeHeight; 
       const playerBoxY = new THREE.Box3().setFromCenterAndSize(
-        new THREE.Vector3(
-          camera.position.x,
-          nextY - eyeHeight / 2,
-          camera.position.z,
-        ), // Bottom-weighted box
-        new THREE.Vector3(playerRadius * 2, eyeHeight, playerRadius * 2),
+        new THREE.Vector3(camera.position.x, nextBaseY + playerBoxHeight / 2, camera.position.z),
+        new THREE.Vector3(playerRadius * 2, playerBoxHeight, playerRadius * 2)
       );
 
       let collidesY = false;
-      let highestFloorY = eyeHeight; // Default ground level based on current eye level
+      let highestFloorY = 0;
 
       for (const box of collisionBoxes) {
         if (playerBoxY.intersectsBox(box)) {
           if ((box as any).isJumpPad) {
-            playerVel.current.y = 40; // massive jump
+            playerVel.current.y = 40; 
             collidesY = false;
             isOnGround = false;
-            camera.position.y += 0.5; // instantly boost out
-            break; // Stop checking
-          } else if (
-            playerVel.current.y <= 0 &&
-            camera.position.y - eyeHeight >= box.max.y - 0.2
-          ) {
-            // Landing on top
-            highestFloorY = Math.max(highestFloorY, box.max.y + eyeHeight);
+            playerBaseY.current += 1.0; // instantly boost out
+            break; 
+          } else if (playerVel.current.y <= 0 && playerBaseY.current >= box.max.y - 0.2) {
+            highestFloorY = Math.max(highestFloorY, box.max.y);
             collidesY = true;
-          } else if (playerVel.current.y > 0 && camera.position.y < box.min.y) {
-            // Hitting head
+          } else if (playerVel.current.y > 0 && playerBaseY.current + playerBoxHeight < box.min.y) {
             collidesY = true;
+            playerVel.current.y = 0;
           }
         }
       }
 
-      if (!collidesY && nextY >= eyeHeight) {
-        camera.position.y = nextY;
+      if (!collidesY && nextBaseY >= 0) {
+        playerBaseY.current = nextBaseY;
       } else {
-        if (collidesY && playerVel.current.y <= 0) {
-          camera.position.y = highestFloorY;
+        if (nextBaseY < 0) {
+          playerBaseY.current = 0;
           isOnGround = true;
+          playerVel.current.y = 0;
+        } else if (collidesY && playerVel.current.y <= 0) {
+          playerBaseY.current = highestFloorY;
+          isOnGround = true;
+          playerVel.current.y = 0;
         }
-        playerVel.current.y = 0;
-      }
-
-      // Ground check (as a hard fallback)
-      if (camera.position.y <= eyeHeight + 0.01) {
-        camera.position.y = Math.max(eyeHeight, camera.position.y);
-        isOnGround = true;
       }
 
       if (keys.current["Space"] && isOnGround && !isCrouching) {
@@ -1794,16 +1812,17 @@ function PhysicsWorld({
       boxSizeY: number,
       boxCenterY: number,
     ) => {
-      const box = new THREE.Box3().setFromCenterAndSize(
-        new THREE.Vector3(newX, boxCenterY, newZ),
-        new THREE.Vector3(playerRadius * 2, boxSizeY, playerRadius * 2),
+      const footY = playerBaseY.current;
+      // Use a slightly offset box for horizontal collision to avoid getting stuck on the floor
+      const collisionBox = new THREE.Box3().setFromCenterAndSize(
+        new THREE.Vector3(newX, boxCenterY + 0.1, newZ),
+        new THREE.Vector3(playerRadius * 2, boxSizeY - 0.2, playerRadius * 2),
       );
       let collides = false;
       let stepUpHeight = 0;
 
       for (const mBox of collisionBoxes) {
-        if (box.intersectsBox(mBox)) {
-          const footY = camera.position.y - 1.8;
+        if (collisionBox.intersectsBox(mBox)) {
           // Check if we can step up (obstacle max Y is within 0.7 units above foot level)
           if (mBox.max.y > footY && mBox.max.y <= footY + 0.75) {
             stepUpHeight = Math.max(stepUpHeight, mBox.max.y - footY);
@@ -1816,15 +1835,19 @@ function PhysicsWorld({
     };
 
     if (mode === GameMode.MAP) {
+      // ... existing MAP mode logic ...
+      const collisionHeight = 1.8 - crouchAmount.current * 0.8;
+      const collisionCenterY = playerBaseY.current + collisionHeight / 2;
+
       const resX = checkMovementCollision(
         nextX,
         camera.position.z,
-        1.6,
-        camera.position.y - 0.8,
+        collisionHeight,
+        collisionCenterY,
       );
       if (!resX.collides) {
         camera.position.x = nextX;
-        if (resX.stepUpHeight > 0) camera.position.y += resX.stepUpHeight;
+        if (resX.stepUpHeight > 0) playerBaseY.current += resX.stepUpHeight;
       } else {
         playerVel.current.x = 0;
       }
@@ -1832,18 +1855,24 @@ function PhysicsWorld({
       const resZ = checkMovementCollision(
         camera.position.x,
         nextZ,
-        1.6,
-        camera.position.y - 0.8,
+        collisionHeight,
+        collisionCenterY,
       );
       if (!resZ.collides) {
         camera.position.z = nextZ;
-        if (resZ.stepUpHeight > 0) camera.position.y += resZ.stepUpHeight;
+        if (resZ.stepUpHeight > 0) playerBaseY.current += resZ.stepUpHeight;
       } else {
         playerVel.current.z = 0;
       }
+
+      // Final camera height adjustment after all collisions
+      camera.position.y = playerBaseY.current + (1.8 - crouchAmount.current * 0.8);
     } else {
       camera.position.x = nextX;
       camera.position.z = nextZ;
+      // In other modes, floor is either at 0 or -1. Let's assume baseY is fixed.
+      const floorY = mode === GameMode.POP_BOTS ? 0 : -1;
+      camera.position.y = (floorY + 1.8) - crouchAmount.current * 0.8;
     }
 
     // Hard Bounds
@@ -2953,27 +2982,28 @@ function Environment({
             position={[0, mode === GameMode.POP_BOTS ? 0.02 : -0.98, 0]}
             infiniteGrid
           />
-          {/* Brighter Axis Lines (Glow effect) with depth offset */}
-          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, mode === GameMode.POP_BOTS ? 0.05 : -0.95, 0]}>
-            <planeGeometry args={[0.1, 2000]} />
-            <meshBasicMaterial 
-              color={themeColor} 
-              transparent 
-              opacity={0.9} 
-              polygonOffset 
-              polygonOffsetFactor={-1}
-            />
-          </mesh>
-          <mesh rotation={[-Math.PI / 2, 0, Math.PI / 2]} position={[0, mode === GameMode.POP_BOTS ? 0.05 : -0.95, 0]}>
-            <planeGeometry args={[0.1, 2000]} />
-            <meshBasicMaterial 
-              color={themeColor} 
-              transparent 
-              opacity={0.9} 
-              polygonOffset 
-              polygonOffsetFactor={-1}
-            />
-          </mesh>
+          {/* Neon Glow Axis Lines */}
+          <group position={[0, mode === GameMode.POP_BOTS ? 0.05 : -0.95, 0]}>
+            {/* Axis 1 */}
+            <mesh rotation={[-Math.PI / 2, 0, 0]}>
+              <planeGeometry args={[0.08, 2000]} />
+              <meshBasicMaterial color={themeColor} transparent opacity={1} />
+            </mesh>
+            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]}>
+              <planeGeometry args={[0.5, 2000]} />
+              <meshBasicMaterial color={themeColor} transparent opacity={0.3} />
+            </mesh>
+            
+            {/* Axis 2 */}
+            <mesh rotation={[-Math.PI / 2, 0, Math.PI / 2]}>
+              <planeGeometry args={[0.08, 2000]} />
+              <meshBasicMaterial color={themeColor} transparent opacity={1} />
+            </mesh>
+            <mesh rotation={[-Math.PI / 2, 0, Math.PI / 2]} position={[0, -0.01, 0]}>
+              <planeGeometry args={[0.5, 2000]} />
+              <meshBasicMaterial color={themeColor} transparent opacity={0.3} />
+            </mesh>
+          </group>
         </group>
       )}
 

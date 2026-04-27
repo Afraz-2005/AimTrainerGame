@@ -1,4 +1,4 @@
-import { GameSettings } from '../types';
+import { GameSettings, GameMode } from '../types';
 import { CrosshairRenderer } from './HUD';
 import { playSound } from '../lib/audio';
 
@@ -197,7 +197,7 @@ export default function Settings({ settings, onUpdate, gameInProgress }: Setting
         </div>
       </div>
 
-      {settings.mode === 'POP_BOTS' && (
+      {(settings.mode === 'POP_BOTS' || settings.mode === GameMode.GRIDSHOT || settings.mode === GameMode.SIXSHOT) && (
         <div className="col-span-full border-t border-zinc-800 pt-6 mt-6 grid grid-cols-1 md:grid-cols-3 gap-8">
           <section>
             <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3 italic">Weapon Select</h3>
