@@ -525,32 +525,29 @@ export default function Game({
     };
 
     const handleWheel = (e: WheelEvent) => {
-      if (settings.mode !== GameMode.MAP || isPaused || countdown !== null)
+      if ((settings.mode !== GameMode.MAP && settings.mode !== GameMode.POP_BOTS) || isPaused || countdown !== null)
         return;
-      const weapons: ("PISTOL" | "DEAGLE" | "AK47" | "AWP" | "KNIFE")[] = [
+      const weapons: ("PISTOL" | "DEAGLE" | "AK47" | "AWP")[] = [
         "PISTOL",
         "DEAGLE",
         "AK47",
         "AWP",
-        "KNIFE",
       ];
-      const limitIndex =
-        settings.popBots.weapon === "KNIFE"
-          ? 3
-          : weapons.indexOf(settings.popBots.weapon as any);
-      let nextIndex = limitIndex;
-      // e.deltaY > 0 is scroll down, e.deltaY < 0 is scroll up
+      const currentIndex = weapons.indexOf(settings.popBots.weapon as any);
+      let nextIndex = currentIndex === -1 ? 0 : currentIndex;
+      
       if (e.deltaY > 0) {
-        nextIndex = (limitIndex + 1) % weapons.length;
+        nextIndex = (nextIndex + 1) % weapons.length;
       } else if (e.deltaY < 0) {
-        nextIndex = (limitIndex - 1 + weapons.length) % weapons.length;
+        nextIndex = (nextIndex - 1 + weapons.length) % weapons.length;
       }
-      if (nextIndex !== limitIndex) {
+
+      if (nextIndex !== currentIndex) {
         onUpdateSettings({
           ...settings,
           popBots: { ...settings.popBots, weapon: weapons[nextIndex] },
         });
-        playSound("click"); // Or unholster sound
+        playSound("click");
       }
     };
 
@@ -1101,6 +1098,9 @@ export default function Game({
           targets={targets}
           mode={settings.mode}
           active={!isPaused && countdown === null}
+          recoilIndex={recoilIndex}
+          playerVel={playerVel}
+          crouchAmount={crouchAmount}
         />
 
         <Environment
@@ -1328,29 +1328,47 @@ function StatsSyncer({
   statsRef, 
   targets, 
   mode, 
-  active 
+  active,
+  recoilIndex,
+  playerVel,
+  crouchAmount
 }: { 
   onUpdateStats: (stats: GameStats) => void;
   statsRef: React.MutableRefObject<GameStats>;
   targets: TargetData[];
   mode: GameMode;
   active: boolean;
+  recoilIndex: React.MutableRefObject<number>;
+  playerVel: React.MutableRefObject<THREE.Vector3>;
+  crouchAmount: React.MutableRefObject<number>;
 }) {
   const { camera } = useThree();
   const lastSync = useRef(0);
 
   useFrame(() => {
-    if (!active || mode !== GameMode.MAP) return;
+    if (!active || mode === GameMode.REACTION) return;
     
-    // Sync every 50ms (20fps for minimap is plenty)
-    if (Date.now() - lastSync.current > 50) {
-      statsRef.current.playerPos = { x: camera.position.x, z: camera.position.z };
-      const euler = new THREE.Euler().setFromQuaternion(camera.quaternion, "YXZ");
-      statsRef.current.playerYaw = euler.y;
+    const now = Date.now();
+    
+    // Calculate display recoil: base recoil (firing) + movement penalty
+    const velLen = Math.sqrt(playerVel.current.x ** 2 + playerVel.current.z ** 2);
+    const movePenalty = velLen > 1 ? (velLen - 1) * 0.5 : 0;
+    const crouchBonus = 1.0 - crouchAmount.current * 0.5;
+    
+    // Combined recoil value for visual crosshair expansion
+    statsRef.current.recoil = (recoilIndex.current + movePenalty) * crouchBonus;
+
+    if (now - lastSync.current > 50) {
+      if (mode === GameMode.MAP) {
+        statsRef.current.playerPos = { x: camera.position.x, z: camera.position.z };
+        const euler = new THREE.Euler().setFromQuaternion(camera.quaternion, "YXZ");
+        statsRef.current.playerYaw = euler.y;
+      }
       statsRef.current.activeTargets = targets;
-      
+      lastSync.current = now;
       onUpdateStats({ ...statsRef.current });
-      lastSync.current = Date.now();
+    } else {
+       onUpdateStats({ ...statsRef.current });
     }
   });
 
@@ -2035,121 +2053,158 @@ function DeagleModel() {
       {/* Upper Slide - Rear Heavy Part with Serrations */}
       <mesh position={[0, 0.08, -0.05]}>
         <boxGeometry args={[0.076, 0.082, 0.3]} />
-        <meshStandardMaterial color="#f8f8f8" metalness={1} roughness={0.02} />
+        <meshStandardMaterial color="#ffffff" metalness={1} roughness={0.1} />
       </mesh>
       {/* Rear Slide Serrations */}
       {Array.from({length: 8}).map((_, i) => (
-        <group key={i} position={[0, 0.08, -0.04 - i * 0.02]}>
+        <group key={i} position={[0, 0.085, -0.03 - i * 0.025]}>
           <mesh position={[0.0385, 0, 0]}>
-            <boxGeometry args={[0.001, 0.05, 0.008]} />
-            <meshStandardMaterial color="#333" />
+            <boxGeometry args={[0.002, 0.06, 0.012]} />
+            <meshStandardMaterial color="#222" />
           </mesh>
           <mesh position={[-0.0385, 0, 0]}>
-            <boxGeometry args={[0.001, 0.05, 0.008]} />
-            <meshStandardMaterial color="#333" />
+            <boxGeometry args={[0.002, 0.06, 0.012]} />
+            <meshStandardMaterial color="#222" />
           </mesh>
         </group>
       ))}
       
-      {/* Upper Slide - Front Lower Part with Rail and Muzzle Brake */}
-      <group position={[0, 0.065, -0.3]}>
-        <mesh position={[0, -0.005, 0]}>
-          <boxGeometry args={[0.072, 0.07, 0.25]} />
-          <meshStandardMaterial color="#fcfcfc" metalness={1} roughness={0.05} />
+      {/* Upper Slide - Front Part (Polygonal look) */}
+      <group position={[0, 0.06, -0.3]}>
+        <mesh position={[0, 0, 0]}>
+          <boxGeometry args={[0.072, 0.08, 0.25]} />
+          <meshStandardMaterial color="#ffffff" metalness={1} roughness={0.08} />
         </mesh>
-        {/* Muzzle Brake Vents (Detailed side vents) */}
-        {[ -0.09, -0.06, -0.03 ].map((zOffset, i) => (
-          <group key={i} position={[0, 0.015, -0.08 + zOffset]}>
-            <mesh position={[0.0355, 0, 0]}>
-               <boxGeometry args={[0.002, 0.055, 0.018]} />
+        {/* Tapered barrel profile */}
+        <mesh position={[0, 0.045, 0]}>
+          <boxGeometry args={[0.05, 0.01, 0.25]} />
+          <meshStandardMaterial color="#eeeeee" metalness={1} roughness={0.05} />
+        </mesh>
+        {/* Large Muzzle Brake Vents (Vertical slots on side) */}
+        {[ -0.09, -0.055, -0.02 ].map((zOffset, i) => (
+          <group key={i} position={[0, 0.01, zOffset]}>
+            <mesh position={[0.036, 0.01, 0]}>
+               <boxGeometry args={[0.005, 0.06, 0.015]} />
                <meshStandardMaterial color="#000" />
             </mesh>
-            <mesh position={[-0.0355, 0, 0]}>
-               <boxGeometry args={[0.002, 0.055, 0.018]} />
+            <mesh position={[-0.036, 0.01, 0]}>
+               <boxGeometry args={[0.005, 0.06, 0.015]} />
                <meshStandardMaterial color="#000" />
             </mesh>
           </group>
         ))}
       </group>
 
-      {/* Rail on top - Weaver/Picatinny style */}
+      {/* Rail on top - Detailed Picatinny */}
       <mesh position={[0, 0.125, -0.2]}>
-        <boxGeometry args={[0.032, 0.025, 0.5]} />
-        <meshStandardMaterial color="#555" metalness={0.9} />
+        <boxGeometry args={[0.035, 0.025, 0.52]} />
+        <meshStandardMaterial color="#444" metalness={0.9} />
       </mesh>
       {/* Rail slots across the top */}
-      {Array.from({length: 12}).map((_, i) => (
-        <mesh key={i} position={[0, 0.138, -0.42 + i * 0.04]}>
-          <boxGeometry args={[0.04, 0.006, 0.012]} />
-          <meshStandardMaterial color="#000" />
+      {Array.from({length: 14}).map((_, i) => (
+        <mesh key={i} position={[0, 0.138, -0.44 + i * 0.035]}>
+          <boxGeometry args={[0.042, 0.005, 0.015]} />
+          <meshStandardMaterial color="#111" />
         </mesh>
       ))}
 
-      {/* Lower frame - Chrome/Steel body */}
-      <mesh position={[0, 0.012, -0.08]}>
-        <boxGeometry args={[0.074, 0.078, 0.44]} />
-        <meshStandardMaterial color="#f0f0f0" metalness={1} roughness={0.05} />
+      {/* Lower frame - High silver body */}
+      <mesh position={[0, 0.01, -0.08]}>
+        <boxGeometry args={[0.074, 0.08, 0.45]} />
+        <meshStandardMaterial color="#ffffff" metalness={1} roughness={0.15} />
       </mesh>
 
-      {/* Slide Stop Lever */}
-      <mesh position={[0.04, 0.04, -0.1]}>
-        <boxGeometry args={[0.005, 0.015, 0.08]} />
-        <meshStandardMaterial color="#222" />
+      {/* Slide Stop / Safety details */}
+      <mesh position={[0.038, 0.05, -0.08]}>
+        <boxGeometry args={[0.008, 0.015, 0.1]} />
+        <meshStandardMaterial color="#333" />
+      </mesh>
+      <mesh position={[-0.038, 0.05, -0.08]}>
+        <boxGeometry args={[0.008, 0.015, 0.1]} />
+        <meshStandardMaterial color="#333" />
       </mesh>
 
-      {/* Magazine Release */}
-      <mesh position={[0.04, -0.03, -0.02]} rotation={[0, 0, Math.PI/2]}>
-        <cylinderGeometry args={[0.01, 0.01, 0.005, 12]} />
-        <meshStandardMaterial color="#222" />
-      </mesh>
-
-      {/* Textured Grip with Logo Medallion */}
-      <group position={[0, -0.16, 0.06]} rotation={[0.18, 0, 0]}>
+      {/* Trigger & Guard */}
+      <group position={[0, -0.08, -0.15]}>
         <mesh>
-          <boxGeometry args={[0.086, 0.3, 0.15]} />
-          <meshStandardMaterial color="#111111" roughness={1} />
+          <boxGeometry args={[0.025, 0.1, 0.18]} />
+          <meshStandardMaterial color="#eeeeee" metalness={1} />
         </mesh>
-        {/* Grip Pattern Overlay */}
-        <mesh position={[0.044, 0, 0]}>
-           <planeGeometry args={[0.12, 0.22]} />
-           <meshStandardMaterial color="#080808" roughness={1} />
+        <mesh position={[0, 0.02, 0]}>
+          {/* Inner cutout for trigger */}
+          <boxGeometry args={[0.02, 0.06, 0.12]} />
+          <meshStandardMaterial color="#000" />
         </mesh>
-        <mesh position={[-0.044, 0, 0]} rotation={[0, Math.PI, 0]}>
-           <planeGeometry args={[0.12, 0.22]} />
-           <meshStandardMaterial color="#080808" roughness={1} />
-        </mesh>
-        {/* Medallion */}
-        <mesh position={[0.046, 0.02, 0]} rotation={[0, Math.PI/2, 0]}>
-           <cylinderGeometry args={[0.022, 0.022, 0.005, 16]} />
-           <meshStandardMaterial color="#aaa" metalness={0.8} roughness={0.2} />
-        </mesh>
-        <mesh position={[-0.046, 0.02, 0]} rotation={[0, -Math.PI/2, 0]}>
-           <cylinderGeometry args={[0.022, 0.022, 0.005, 16]} />
-           <meshStandardMaterial color="#aaa" metalness={0.8} roughness={0.2} />
+        {/* Trigger itself */}
+        <mesh position={[0, 0.02, 0.03]} rotation={[-0.4, 0, 0]}>
+          <boxGeometry args={[0.015, 0.05, 0.01]} />
+          <meshStandardMaterial color="#111" />
         </mesh>
       </group>
 
-      {/* Hammer - Extended look */}
-      <mesh position={[0, 0.13, 0.12]} rotation={[-0.8, 0, 0]}>
-        <boxGeometry args={[0.02, 0.05, 0.12]} />
-        <meshStandardMaterial color="#000" />
-      </mesh>
+      {/* Textured Grip */}
+      <group position={[0, -0.18, 0.08]} rotation={[0.2, 0, 0]}>
+        <mesh>
+          <boxGeometry args={[0.088, 0.32, 0.16]} />
+          <meshStandardMaterial color="#111111" roughness={1} />
+        </mesh>
+        {/* Side panel texture look */}
+        <mesh position={[0.045, 0, 0]}>
+           <planeGeometry args={[0.13, 0.28]} />
+           <meshStandardMaterial color="#0a0a0a" roughness={1} />
+        </mesh>
+        {/* Medallion Medallion */}
+        <mesh position={[0.046, 0.03, 0]} rotation={[0, Math.PI/2, 0]}>
+           <cylinderGeometry args={[0.024, 0.024, 0.005, 16]} />
+           <meshStandardMaterial color="#cccccc" metalness={1} roughness={0.2} />
+        </mesh>
+        <mesh position={[-0.046, 0.03, 0]} rotation={[0, -Math.PI/2, 0]}>
+           <cylinderGeometry args={[0.024, 0.024, 0.005, 16]} />
+           <meshStandardMaterial color="#cccccc" metalness={1} roughness={0.2} />
+        </mesh>
+        {/* Grip screws */}
+        {[0.12, -0.12].map((y, i) => (
+          <mesh key={i} position={[0.046, y, 0.04]} rotation={[0, Math.PI/2, 0]}>
+            <cylinderGeometry args={[0.008, 0.008, 0.005, 8]} />
+            <meshStandardMaterial color="#333" />
+          </mesh>
+        ))}
+      </group>
 
-      {/* Sights - Target style */}
-      <mesh position={[0, 0.145, 0.08]}>
-        <boxGeometry args={[0.03, 0.03, 0.03]} />
+      {/* Hammer - More detailed shape */}
+      <group position={[0, 0.11, 0.15]} rotation={[-0.8, 0, 0]}>
+        <mesh>
+          <boxGeometry args={[0.02, 0.04, 0.1]} />
+          <meshStandardMaterial color="#222" />
+        </mesh>
+        <mesh position={[0, 0.02, 0.04]}>
+          <boxGeometry args={[0.025, 0.01, 0.05]} />
+          <meshStandardMaterial color="#111" />
+        </mesh>
+      </group>
+
+      {/* Target Sights */}
+      <mesh position={[0, 0.145, 0.1]}>
+        <boxGeometry args={[0.035, 0.04, 0.04]} />
         <meshStandardMaterial color="#000" />
       </mesh>
-      <mesh position={[0, 0.148, -0.42]}>
-        <boxGeometry args={[0.015, 0.045, 0.02]} />
+      <mesh position={[0, 0.15, -0.42]}>
+        <boxGeometry args={[0.015, 0.05, 0.02]} />
         <meshStandardMaterial color="#000" />
       </mesh>
       
-      {/* Markings details - Engraving look */}
-      <mesh position={[0.04, 0.055, -0.12]} rotation={[0, Math.PI/2, 0]}>
-        <planeGeometry args={[0.14, 0.025]} />
-        <meshStandardMaterial color="#000" transparent opacity={0.6} />
-      </mesh>
+      {/* Markings details - Detailed engraved box */}
+      <group position={[0.04, 0.05, -0.12]} rotation={[0, Math.PI/2, 0]}>
+        <mesh>
+          <planeGeometry args={[0.15, 0.03]} />
+          <meshStandardMaterial color="#000" transparent opacity={0.5} />
+        </mesh>
+        {/* Small "DESERT EAGLE" text simulation */}
+        <mesh position={[0, 0.005, 0.001]}>
+          <planeGeometry args={[0.1, 0.005]} />
+          <meshStandardMaterial color="#888" />
+        </mesh>
+      </group>
     </group>
   );
 }
@@ -2888,12 +2943,12 @@ function Environment({
           <Grid
             args={[200, 200]}
             sectionSize={1}
-            sectionThickness={0.5}
-            sectionColor="#1a1a1a"
+            sectionThickness={2}
+            sectionColor={theme === "retro" ? themeColor : "#2a2a2a"}
             cellSize={0.25}
-            cellThickness={0.2}
-            cellColor="#080808"
-            fadeDistance={150}
+            cellThickness={1}
+            cellColor={theme === "retro" ? themeColor : "#151515"}
+            fadeDistance={80}
             fadeStrength={10}
             position={[0, mode === GameMode.POP_BOTS ? 0.02 : -0.98, 0]}
             infiniteGrid

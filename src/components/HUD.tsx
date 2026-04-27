@@ -38,7 +38,7 @@ export default function HUD({ settings, crosshair, stats, mode, botsHitBack }: H
       {/* Target Logic & Crosshair */}
       {mode !== GameMode.REACTION && (
         <div className="absolute inset-0 flex items-center justify-center">
-          <CrosshairRenderer settings={crosshair} />
+          <CrosshairRenderer settings={crosshair} recoil={stats?.recoil || 0} />
         </div>
       )}
 
@@ -162,21 +162,23 @@ export default function HUD({ settings, crosshair, stats, mode, botsHitBack }: H
   );
 }
 
-export function CrosshairRenderer({ settings }: { settings: CrosshairSettings }) {
-  const { style, size, thickness, gap, color, opacity } = settings;
-  const halfGap = gap / 2;
+export function CrosshairRenderer({ settings, recoil = 0 }: { settings: CrosshairSettings; recoil?: number }) {
+  const { style, size, thickness, gap, color, opacity, enableRecoil } = settings;
+  const dynamicGap = enableRecoil ? gap + (recoil * 10) : gap;
+  const halfGap = dynamicGap / 2;
+  const outerSize = size * 2 + dynamicGap;
 
   const styleMap = {
     cross: (
-      <svg width={size * 2 + gap} height={size * 2 + gap} viewBox={`0 0 ${size * 2 + gap} ${size * 2 + gap}`}>
+      <svg width={outerSize} height={outerSize} viewBox={`0 0 ${outerSize} ${outerSize}`} className="transition-all duration-75">
         {/* Top */}
         <rect x={size + halfGap - thickness / 2} y="0" width={thickness} height={size} fill={color} fillOpacity={opacity} />
         {/* Bottom */}
-        <rect x={size + halfGap - thickness / 2} y={size + gap} width={thickness} height={size} fill={color} fillOpacity={opacity} />
+        <rect x={size + halfGap - thickness / 2} y={size + dynamicGap} width={thickness} height={size} fill={color} fillOpacity={opacity} />
         {/* Left */}
         <rect x="0" y={size + halfGap - thickness / 2} width={size} height={thickness} fill={color} fillOpacity={opacity} />
         {/* Right */}
-        <rect x={size + gap} y={size + halfGap - thickness / 2} width={size} height={thickness} fill={color} fillOpacity={opacity} />
+        <rect x={size + dynamicGap} y={size + halfGap - thickness / 2} width={size} height={thickness} fill={color} fillOpacity={opacity} />
       </svg>
     ),
     dot: (
@@ -185,18 +187,18 @@ export function CrosshairRenderer({ settings }: { settings: CrosshairSettings })
       </svg>
     ),
     circle: (
-      <svg width={size * 2} height={size * 2} viewBox={`0 0 ${size * 2} ${size * 2}`}>
+      <svg width={size * 2 + recoil * 20} height={size * 2 + recoil * 20} viewBox={`0 0 ${size * 2} ${size * 2}`} className="transition-all duration-75">
         <circle cx={size} cy={size} r={size - thickness / 2} stroke={color} strokeWidth={thickness} fill="none" strokeOpacity={opacity} />
       </svg>
     ),
     't-shape': (
-      <svg width={size * 2 + gap} height={size * 2 + gap} viewBox={`0 0 ${size * 2 + gap} ${size * 2 + gap}`}>
+      <svg width={outerSize} height={outerSize} viewBox={`0 0 ${outerSize} ${outerSize}`} className="transition-all duration-75">
          {/* Bottom */}
-         <rect x={size + halfGap - thickness / 2} y={size + gap} width={thickness} height={size} fill={color} fillOpacity={opacity} />
+         <rect x={size + halfGap - thickness / 2} y={size + dynamicGap} width={thickness} height={size} fill={color} fillOpacity={opacity} />
         {/* Left */}
         <rect x="0" y={size + halfGap - thickness / 2} width={size} height={thickness} fill={color} fillOpacity={opacity} />
         {/* Right */}
-        <rect x={size + gap} y={size + halfGap - thickness / 2} width={size} height={thickness} fill={color} fillOpacity={opacity} />
+        <rect x={size + dynamicGap} y={size + halfGap - thickness / 2} width={size} height={thickness} fill={color} fillOpacity={opacity} />
       </svg>
     )
   };

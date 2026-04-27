@@ -38,6 +38,7 @@ export interface CrosshairSettings {
   gap: number;
   color: string;
   opacity: number;
+  enableRecoil: boolean;
 }
 
 export interface HUDSettings {
@@ -75,6 +76,7 @@ export interface GameStats {
   playerPos?: { x: number; z: number };
   playerYaw?: number;
   activeTargets?: TargetData[];
+  recoil?: number;
 }
 
 export interface TargetData {

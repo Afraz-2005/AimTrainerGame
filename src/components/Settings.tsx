@@ -5,9 +5,10 @@ import { playSound } from '../lib/audio';
 interface SettingsProps {
   settings: GameSettings;
   onUpdate: (settings: GameSettings) => void;
+  gameInProgress?: boolean;
 }
 
-export default function Settings({ settings, onUpdate }: SettingsProps) {
+export default function Settings({ settings, onUpdate, gameInProgress }: SettingsProps) {
   const updateCrosshairColor = (color: string) => {
     playSound('click');
     onUpdate({ 
@@ -42,18 +43,33 @@ export default function Settings({ settings, onUpdate }: SettingsProps) {
               />
             </div>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+          <div className="flex flex-wrap gap-2 mb-4">
             {(['cross', 'dot', 'circle', 't-shape'] as const).map(style => (
               <button 
                 key={style}
                 onClick={() => onUpdate({ ...settings, crosshair: { ...settings.crosshair, style } })}
-                className={`py-2 text-[10px] font-bold uppercase transition-all ${
+                className={`py-2 px-4 text-[10px] font-bold uppercase transition-all ${
                   settings.crosshair.style === style ? 'bg-white text-black' : 'bg-zinc-800 text-zinc-400 hover:bg-lime-400 hover:text-black'
                 }`}
               >
                 {style.replace('-shape', '')}
               </button>
             ))}
+          </div>
+
+          <div className="flex items-center justify-between p-4 bg-zinc-900 border border-zinc-800 mb-4">
+            <div className="flex flex-col">
+              <span className="text-[10px] font-bold uppercase text-zinc-400">Dynamic Crosshair</span>
+              <span className="text-[8px] font-mono text-zinc-600 uppercase tracking-tighter">Toggle Recoil Expansion</span>
+            </div>
+            <button 
+              onClick={() => onUpdate({ ...settings, crosshair: { ...settings.crosshair, enableRecoil: !settings.crosshair.enableRecoil } })}
+              className={`px-4 py-2 text-[10px] font-bold uppercase transition-all ${
+                settings.crosshair.enableRecoil ? 'bg-lime-400 text-black' : 'bg-zinc-800 text-zinc-500'
+              }`}
+            >
+              {settings.crosshair.enableRecoil ? 'RECOIL: ON' : 'RECOIL: OFF'}
+            </button>
           </div>
 
           <div className="space-y-2">
@@ -266,46 +282,83 @@ export default function Settings({ settings, onUpdate }: SettingsProps) {
       )}
 
       {settings.mode === 'MAP' && (
-        <div className="col-span-full border-t border-zinc-800 pt-6 mt-6 grid grid-cols-1 md:grid-cols-2 gap-8">
-          <section className="space-y-2">
-            <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3 italic">Map Target Logic</h3>
+        <div className="col-span-full border-t border-zinc-800 pt-6 mt-6 grid grid-cols-1 lg:grid-cols-12 gap-8">
+          <div className="lg:col-span-12">
+             <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-4 italic">Map Tactics: Mission Selection</h3>
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <button 
+                  disabled={gameInProgress}
+                  onClick={() => onUpdate({ ...settings, map: { ...settings.map, botsHitBack: false } })}
+                  className={`p-6 border-2 transition-all flex flex-col items-start gap-2 ${
+                    !settings.map.botsHitBack 
+                      ? 'bg-zinc-800 border-lime-400' 
+                      : 'bg-zinc-900 border-zinc-800 opacity-60 hover:opacity-100'
+                  } ${gameInProgress ? 'cursor-not-allowed' : ''}`}
+                >
+                  <span className={`text-xl font-black italic uppercase ${!settings.map.botsHitBack ? 'text-lime-400' : 'text-white'}`}>Tactical Practice</span>
+                  <span className="text-[10px] font-mono text-zinc-500 uppercase text-left leading-tight">
+                    Standard target engagement. Bots do not fire back. Use for map familiarity and pre-fire training.
+                  </span>
+                  {gameInProgress && !settings.map.botsHitBack && <span className="text-[8px] text-lime-600 font-bold mt-2 animate-pulse uppercase">Active Session</span>}
+                </button>
+
+                <button 
+                  disabled={gameInProgress}
+                  onClick={() => onUpdate({ ...settings, map: { ...settings.map, botsHitBack: true } })}
+                  className={`p-6 border-2 transition-all flex flex-col items-start gap-2 ${
+                    settings.map.botsHitBack 
+                      ? 'bg-zinc-800 border-red-500' 
+                      : 'bg-zinc-900 border-zinc-800 opacity-60 hover:opacity-100'
+                  } ${gameInProgress ? 'cursor-not-allowed' : ''}`}
+                >
+                  <span className={`text-xl font-black italic uppercase ${settings.map.botsHitBack ? 'text-red-500' : 'text-white'}`}>Survival Protocol</span>
+                  <span className="text-[10px] font-mono text-zinc-500 uppercase text-left leading-tight">
+                    High stakes engagement. Bots will return fire with lethal accuracy. Neural calibration under pressure.
+                  </span>
+                  {gameInProgress && settings.map.botsHitBack && <span className="text-[8px] text-red-600 font-bold mt-2 animate-pulse uppercase">Active Session</span>}
+                </button>
+             </div>
+             {gameInProgress && (
+                <p className="mt-4 text-[9px] font-mono text-zinc-600 uppercase italic">
+                  * MISSION TYPE IS LOCKED WHILE DEPLOYED. EXIT TO HUB TO RE-CALIBRATE.
+                </p>
+             )}
+          </div>
+
+          <section className="lg:col-span-5 space-y-4">
+            <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3 italic">Sub-Systems</h3>
             <div className="flex items-center justify-between p-4 bg-zinc-900 border border-zinc-800">
-              <span className="text-[10px] font-bold uppercase text-zinc-400">Bots Hit Back (Survival)</span>
-              <button 
-                onClick={() => onUpdate({ ...settings, map: { ...settings.map, botsHitBack: !settings.map.botsHitBack } })}
-                className={`px-4 py-2 text-[10px] font-bold uppercase transition-all ${
-                  settings.map.botsHitBack ? 'bg-lime-400 text-black' : 'bg-zinc-800 text-zinc-500'
-                }`}
-              >
-                {settings.map.botsHitBack ? 'ENABLED' : 'DISABLED'}
-              </button>
-            </div>
-            <div className="flex items-center justify-between p-4 bg-zinc-900 border border-zinc-800">
-              <span className="text-[10px] font-bold uppercase text-zinc-400">Infinite Ammo</span>
+              <div className="flex flex-col">
+                <span className="text-[10px] font-bold uppercase text-zinc-400">Infinite Ammo</span>
+                <span className="text-[8px] font-mono text-zinc-600 uppercase">Automatic Magazine Sync</span>
+              </div>
               <button 
                 onClick={() => onUpdate({ ...settings, map: { ...settings.map, infiniteAmmo: !settings.map.infiniteAmmo } })}
                 className={`px-4 py-2 text-[10px] font-bold uppercase transition-all ${
                   settings.map.infiniteAmmo ? 'bg-lime-400 text-black' : 'bg-zinc-800 text-zinc-500'
                 }`}
               >
-                {settings.map.infiniteAmmo ? 'ENABLED' : 'DISABLED'}
+                {settings.map.infiniteAmmo ? 'ON' : 'OFF'}
               </button>
             </div>
             <div className="flex items-center justify-between p-4 bg-zinc-900 border border-zinc-800">
-              <span className="text-[10px] font-bold uppercase text-zinc-400">Static Bots (60s)</span>
+              <div className="flex flex-col">
+                <span className="text-[10px] font-bold uppercase text-zinc-400">Static Bots (60s)</span>
+                <span className="text-[8px] font-mono text-zinc-600 uppercase">Immobile Training Units</span>
+              </div>
               <button 
                 onClick={() => onUpdate({ ...settings, map: { ...settings.map, isStaticBots: !settings.map.isStaticBots } })}
                 className={`px-4 py-2 text-[10px] font-bold uppercase transition-all ${
                   settings.map.isStaticBots ? 'bg-lime-400 text-black' : 'bg-zinc-800 text-zinc-500'
                 }`}
               >
-                {settings.map.isStaticBots ? 'ENABLED' : 'DISABLED'}
+                {settings.map.isStaticBots ? 'ON' : 'OFF'}
               </button>
             </div>
           </section>
 
-          <section>
-            <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3 italic">Weapon & Difficulty</h3>
+          <section className="lg:col-span-7">
+            <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3 italic">Deployment Gear</h3>
             <div className="grid grid-cols-4 gap-2 mb-4">
               {(['PISTOL', 'DEAGLE', 'AK47', 'AWP'] as const).map(w => (
                 <button 
@@ -320,15 +373,15 @@ export default function Settings({ settings, onUpdate }: SettingsProps) {
               ))}
             </div>
             {settings.map.botsHitBack && (
-              <div className="space-y-2 mt-4">
-                <h4 className="text-[10px] font-mono text-zinc-500 uppercase">Bot Difficulty (Hit Back)</h4>
+              <div className="space-y-2 mt-4 p-4 bg-red-950/20 border border-red-900/40">
+                <h4 className="text-[10px] font-mono text-red-500 uppercase font-black tracking-widest mb-2 italic">Neural Threat Level</h4>
                 <div className="grid grid-cols-3 gap-2">
                   {(['EASY', 'MEDIUM', 'HARD'] as const).map(d => (
                     <button 
                       key={d}
                       onClick={() => onUpdate({ ...settings, map: { ...settings.map, difficulty: d } })}
                       className={`py-2 text-[10px] font-bold uppercase transition-all ${
-                        settings.map.difficulty === d ? 'bg-white text-black' : 'bg-zinc-800 text-zinc-400 hover:bg-lime-400 hover:text-black'
+                        settings.map.difficulty === d ? 'bg-red-500 text-black' : 'bg-zinc-800 text-zinc-400 hover:bg-red-400 hover:text-black'
                       }`}
                     >
                       {d}

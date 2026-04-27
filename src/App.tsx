@@ -38,6 +38,7 @@ const DEFAULT_SETTINGS: GameSettings = {
     gap: 4,
     color: '#a3e635',
     opacity: 1,
+    enableRecoil: false,
   },
   hud: {
     color: '#a3e635',
@@ -53,6 +54,24 @@ export default function App() {
   const [lastStats, setLastStats] = useState<GameStats | null>(null);
   const [currentStats, setCurrentStats] = useState<GameStats | null>(null);
   const [isPaused, setIsPaused] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera;
+      const mobileRegex = /Android|webOS|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i;
+      // Also block if screen is very narrow (phone-like) or if it's a known mobile UA
+      if (mobileRegex.test(userAgent) || window.innerWidth < 500) {
+        setIsMobile(true);
+      } else {
+        setIsMobile(false);
+      }
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   const startGame = useCallback((mode: GameMode) => {
     setSettings(prev => ({ ...prev, mode }));
@@ -84,8 +103,31 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [view]);
 
+  if (isMobile) {
+    return (
+      <div className="w-screen h-screen bg-black flex flex-col items-center justify-center p-8 text-center font-mono">
+        <h1 className="text-4xl font-black italic uppercase mb-8" style={{ color: settings.themeColor }}>VOXEL AIM</h1>
+        <div className="p-8 border-4 border-zinc-800 bg-zinc-900 max-w-md">
+          <p className="text-zinc-400 text-sm leading-relaxed mb-6">
+            &gt; SYSTEM ERROR: HARDWARE MISMATCH<br />
+            &gt; MOBILE DEVICES ARE NOT SUPPORTED FOR NEURAL ACCURACY TRAINING.<br />
+            &gt; PLEASE ACCESS THE HUB VIA A DESKTOP ARCHITECTURE.
+          </p>
+          <div className="h-1 bg-zinc-800 w-full overflow-hidden">
+            <motion.div 
+              animate={{ x: ['-100%', '100%'] }} 
+              transition={{ repeat: Infinity, duration: 2, ease: "linear" }}
+              className="h-full w-1/2" 
+              style={{ backgroundColor: settings.themeColor }}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="relative w-screen h-screen bg-zinc-950 overflow-hidden font-sans select-none text-white">
+    <div className="relative w-screen h-screen bg-zinc-950 overflow-hidden font-sans select-none text-white lg:border-[16px] border-zinc-900 border-8">
       <AnimatePresence mode="wait">
         {view === GameView.MENU && (
           <motion.div
@@ -93,24 +135,24 @@ export default function App() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 z-50 flex flex-col p-8 border-[16px] border-zinc-900 bg-zinc-950 shadow-inner"
+            className="absolute inset-0 z-50 flex flex-col p-4 lg:p-8 bg-zinc-950 shadow-inner overflow-y-auto"
           >
-            <header className="flex justify-between items-end mb-12">
+            <header className="flex flex-col lg:flex-row justify-between items-start lg:items-end mb-8 lg:mb-12 gap-4">
               <div>
-                <h1 className="text-[120px] leading-[0.8] font-black tracking-tighter italic uppercase select-none" style={{ color: settings.themeColor }}>
+                <h1 className="text-[60px] md:text-[80px] lg:text-[120px] leading-[0.8] font-black tracking-tighter italic uppercase select-none" style={{ color: settings.themeColor }}>
                   VOXEL <span className="text-white">AIM</span>
                 </h1>
-                <p className="mt-4 text-zinc-500 font-mono tracking-widest text-sm uppercase">Performance Aiming Environment v2.0</p>
+                <p className="mt-2 lg:mt-4 text-zinc-500 font-mono tracking-widest text-[10px] lg:text-sm uppercase">Performance Aiming Environment v2.0</p>
               </div>
-              <div className="flex flex-col items-end gap-2">
-                <div className="text-black px-4 py-1 font-bold text-xs uppercase" style={{ backgroundColor: settings.themeColor }}>System: Active</div>
-                <div className="border-2 border-zinc-800 px-4 py-1 text-zinc-400 font-mono text-xs uppercase">Sync: Valorant / CS2</div>
+              <div className="flex flex-col items-end gap-2 w-full lg:w-auto">
+                <div className="text-black px-4 py-1 font-bold text-[10px] lg:text-xs uppercase w-full lg:w-auto text-center lg:text-left" style={{ backgroundColor: settings.themeColor }}>System: Active</div>
+                <div className="border-2 border-zinc-800 px-4 py-1 text-zinc-400 font-mono text-[10px] lg:text-xs uppercase w-full lg:w-auto text-center lg:text-left">Sync: Valorant / CS2</div>
               </div>
             </header>
 
-            <main className="grid grid-cols-12 gap-8 flex-grow overflow-hidden">
-              <div className="col-span-4 flex flex-col gap-4 h-full">
-                <div className="flex flex-col gap-2">
+            <main className="grid grid-cols-1 md:grid-cols-12 gap-4 lg:gap-8 flex-grow overflow-hidden">
+              <div className="col-span-full md:col-span-4 flex flex-col gap-2 lg:gap-4 h-full">
+                <div className="flex flex-col gap-2 overflow-y-auto max-h-[300px] md:max-h-none pr-2">
                   <GameModeCard 
                     title="Gridshot" 
                     highScore="112k"
@@ -150,28 +192,23 @@ export default function App() {
                 
                 <button
                   onClick={() => startGame(settings.mode)}
-                  className="w-full group relative bg-white text-black p-6 flex flex-col items-start transition-all hover:translate-x-2 mt-auto"
+                  className="w-full group relative bg-white text-black p-4 lg:p-6 flex flex-col items-start transition-all hover:translate-x-2 mt-auto"
                 >
-                  <span className="text-6xl font-black italic uppercase leading-none">PLAY</span>
-                  <span className="text-xs font-bold uppercase mt-2 opacity-60">Start Training Session</span>
-                  <div className="absolute right-4 bottom-4 w-12 h-12 shadow-[4px_4px_0px_0px_#000]" style={{ backgroundColor: settings.themeColor }}></div>
+                  <span className="text-4xl lg:text-6xl font-black italic uppercase leading-none">PLAY</span>
+                  <span className="text-[10px] lg:text-xs font-bold uppercase mt-1 lg:mt-2 opacity-60">Start Training Session</span>
+                  <div className="absolute right-4 bottom-4 w-8 h-8 lg:w-12 lg:h-12 shadow-[4px_4px_0px_0px_#000]" style={{ backgroundColor: settings.themeColor }}></div>
                 </button>
               </div>
 
-              <div className="col-span-8 bg-zinc-900 p-8 border-4 border-zinc-800 relative overflow-y-auto">
-                <div className="absolute -top-4 left-6 text-black px-4 py-1 font-black uppercase text-sm italic" style={{ backgroundColor: settings.themeColor }}>Configurator</div>
-                <Settings settings={settings} onUpdate={setSettings} />
+              <div className="col-span-full md:col-span-8 bg-zinc-900 p-4 lg:p-8 border-4 border-zinc-800 relative overflow-y-auto min-h-[400px]">
+                <div className="absolute -top-4 left-6 text-black px-4 py-1 font-black uppercase text-[10px] lg:text-sm italic z-10" style={{ backgroundColor: settings.themeColor }}>Configurator</div>
+                <Settings settings={settings} onUpdate={setSettings} gameInProgress={false} />
               </div>
             </main>
 
-            <footer className="mt-auto flex justify-between items-center py-4 border-t-2 border-zinc-900">
-              <div className="flex gap-6 text-[10px] font-bold text-zinc-600 uppercase tracking-widest">
-                <span>Leaderboards</span>
-                <span>Workshop</span>
-                <span>Academy</span>
-              </div>
-              <div className="text-zinc-400 font-mono text-xs uppercase">
-                [ ESC ] BACK TO MENU — [ F1 ] INSTANT RESTART
+            <footer className="mt-4 lg:mt-auto flex justify-center items-center py-2 border-t-2 border-zinc-900">
+              <div className="text-zinc-500 font-mono text-[8px] lg:text-[10px] uppercase text-center opacity-60">
+                [ ESC ] MENU — [ F1 ] RESTART
               </div>
             </footer>
           </motion.div>
@@ -209,7 +246,7 @@ export default function App() {
                 >
                    <div className="w-full max-w-4xl max-h-[90vh] overflow-y-auto bg-zinc-950 border-[16px] border-zinc-900 p-8 relative shadow-2xl">
                     <div className="absolute -top-4 left-6 text-black px-4 py-1 font-black uppercase text-sm italic" style={{ backgroundColor: settings.themeColor }}>Paused Settings</div>
-                    <Settings settings={settings} onUpdate={setSettings} />
+                    <Settings settings={settings} onUpdate={setSettings} gameInProgress={true} />
                     <div className="mt-8 flex gap-4">
                       <button 
                         onClick={() => setIsPaused(false)}
