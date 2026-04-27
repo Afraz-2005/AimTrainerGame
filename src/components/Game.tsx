@@ -5,6 +5,7 @@ import {
   Sky,
   Stars,
   ContactShadows,
+  Grid,
 } from "@react-three/drei";
 import * as THREE from "three";
 import confetti from "canvas-confetti";
@@ -438,6 +439,7 @@ export default function Game({
   const [countdown, setCountdown] = useState<number | null>(3);
   const [isScoped, setIsScoped] = useState(false);
   const [gameStatus, setGameStatus] = useState<'victory' | 'loss' | null>(null);
+  const crouchAmount = useRef(0);
   const playerVel = useRef(new THREE.Vector3());
   const recoilIndex = useRef(0);
   const keys = useRef<{ [key: string]: boolean }>({});
@@ -449,9 +451,11 @@ export default function Game({
       ? 30
       : settings.popBots.weapon === "PISTOL"
         ? 12
-        : settings.popBots.weapon === "AWP"
-          ? 10
-          : Infinity;
+        : settings.popBots.weapon === "DEAGLE"
+          ? 7
+          : settings.popBots.weapon === "AWP"
+            ? 10
+            : Infinity;
   };
 
   const statsRef = useRef<GameStats>({
@@ -498,7 +502,9 @@ export default function Game({
               ? 30
               : settings.popBots.weapon === "PISTOL"
                 ? 12
-                : 10;
+                : settings.popBots.weapon === "DEAGLE"
+                  ? 7
+                  : 10;
           statsRef.current.ammo = max;
           statsRef.current.isReloading = false;
           setIsReloading(false);
@@ -521,8 +527,9 @@ export default function Game({
     const handleWheel = (e: WheelEvent) => {
       if (settings.mode !== GameMode.MAP || isPaused || countdown !== null)
         return;
-      const weapons: ("PISTOL" | "AK47" | "AWP" | "KNIFE")[] = [
+      const weapons: ("PISTOL" | "DEAGLE" | "AK47" | "AWP" | "KNIFE")[] = [
         "PISTOL",
+        "DEAGLE",
         "AK47",
         "AWP",
         "KNIFE",
@@ -804,6 +811,7 @@ export default function Game({
     if (!isHeadshot) {
       if (weapon === "AK47") damage = 35;
       else if (weapon === "PISTOL") damage = 26;
+      else if (weapon === "DEAGLE") damage = 55; // 2 shots to body (55*2 = 110)
       else if (weapon === "AWP") damage = 115;
       else if (weapon === "KNIFE") damage = 55;
 
@@ -1084,6 +1092,7 @@ export default function Game({
           isReloading={isReloading}
           recoilIndex={recoilIndex}
           difficulty={settings.mode === GameMode.MAP ? settings.map.difficulty : settings.popBots.difficulty}
+          crouchAmount={crouchAmount}
         />
 
         <StatsSyncer 
@@ -1369,6 +1378,7 @@ function PhysicsWorld({
   isReloading,
   recoilIndex,
   difficulty,
+  crouchAmount,
 }: {
   targets: TargetData[];
   onHit: (id: string, isHeadshot: boolean) => void;
@@ -1390,6 +1400,7 @@ function PhysicsWorld({
   isReloading: boolean;
   recoilIndex: React.MutableRefObject<number>;
   difficulty?: string;
+  crouchAmount: React.MutableRefObject<number>;
 }) {
   const { camera, raycaster, scene } = useThree();
 
@@ -1451,6 +1462,8 @@ function PhysicsWorld({
 
     if (weapon === "KNIFE") {
       playSound("click"); // Swipe sound
+    } else if (weapon === "DEAGLE") {
+      playSound("deagle");
     } else {
       playSound("fire");
     }
@@ -1462,26 +1475,34 @@ function PhysicsWorld({
       playerVel.current.x ** 2 + playerVel.current.z ** 2,
     ); // horizontal velocity
     const moveInaccuracy = velLen > 2 ? velLen * 0.005 : 0;
+    const crouchAccuracyBonus = 1.0 - crouchAmount.current * 0.7; // Up to 70% reduction in base spread
 
     if (weapon === "AK47") {
       const shots = Math.floor(recoilIndex.current);
       const idx = Math.min(shots, AK47_PATTERN.length - 1);
       const pattern = AK47_PATTERN[idx];
       // Base pattern + slight random inaccuracy + movement inaccuracy
-      spreadX = pattern[0] + (Math.random() - 0.5) * (0.01 + moveInaccuracy);
-      spreadY = pattern[1] + (Math.random() - 0.5) * (0.01 + moveInaccuracy);
+      spreadX = (pattern[0] + (Math.random() - 0.5) * 0.01) * crouchAccuracyBonus + (Math.random() - 0.5) * moveInaccuracy;
+      spreadY = (pattern[1] + (Math.random() - 0.5) * 0.01) * crouchAccuracyBonus + (Math.random() - 0.5) * moveInaccuracy;
 
       recoilIndex.current += 1;
     } else {
       if (weapon === "AWP") {
-        const baseSpread = isScoped ? 0.001 : 0.08;
+        const baseSpread = (isScoped ? 0.001 : 0.08) * crouchAccuracyBonus;
         spreadX = (Math.random() - 0.5) * (baseSpread + moveInaccuracy * 2);
         spreadY = (Math.random() - 0.5) * (baseSpread + moveInaccuracy * 2);
       } else if (weapon === "PISTOL") {
-        spreadX = (Math.random() - 0.5) * (0.01 + moveInaccuracy * 0.5);
-        spreadY = (Math.random() - 0.5) * (0.01 + moveInaccuracy * 0.5);
+        const baseSpread = 0.01 * crouchAccuracyBonus;
+        spreadX = (Math.random() - 0.5) * (baseSpread + moveInaccuracy * 0.5);
+        spreadY = (Math.random() - 0.5) * (baseSpread + moveInaccuracy * 0.5);
+      } else if (weapon === "DEAGLE") {
+        // High recoil and high movement inaccuracy, but crouch helps a lot
+        const baseSpread = 0.015 * crouchAccuracyBonus;
+        spreadX = (Math.random() - 0.5) * (baseSpread + moveInaccuracy * 1.5);
+        spreadY = (Math.random() - 0.5) * (baseSpread + moveInaccuracy * 1.5);
+        recoilIndex.current = 10; // Instant high kick
       }
-      recoilIndex.current = 0;
+      if (weapon !== "DEAGLE") recoilIndex.current = 0;
     }
 
     raycaster.setFromCamera(new THREE.Vector2(spreadX, spreadY), camera);
@@ -1536,8 +1557,12 @@ function PhysicsWorld({
       finalHitPoint.copy(targetHit.point);
       const targetId = targetHit.object.userData.id;
       const isHeadshot = targetHit.object.name === "bot-head";
-      if (isHeadshot) playSound("headshot");
-      else playSound("hit");
+      if (isHeadshot) {
+        playSound("headshot");
+      } else {
+        const hitSound = (mode === GameMode.SIXSHOT || mode === GameMode.GRIDSHOT) ? "pop" : "hit";
+        playSound(hitSound);
+      }
       onHit(targetId, isHeadshot);
       didHit = true;
     } else {
@@ -1599,10 +1624,21 @@ function PhysicsWorld({
         recoilIndex.current = Math.max(0, recoilIndex.current - delta * 15);
       }
     } else {
-      recoilIndex.current = 0;
+      recoilIndex.current = Math.max(0, recoilIndex.current - delta * 15);
     }
 
-    const moveSpeed = mode === GameMode.MAP ? 12 : 8;
+    const isCrouching = keys.current["ControlLeft"] || keys.current["KeyC"];
+    const targetCrouch = isCrouching ? 1 : 0;
+    crouchAmount.current = THREE.MathUtils.lerp(
+      crouchAmount.current,
+      targetCrouch,
+      delta * 12,
+    );
+
+    const eyeHeight = 1.8 - crouchAmount.current * 0.8;
+    const moveSpeedMult = 1.0 - crouchAmount.current * 0.6;
+
+    const moveSpeed = (mode === GameMode.MAP ? 12 : 8) * moveSpeedMult;
     const accel = 15;
 
     const input = new THREE.Vector3();
@@ -1675,12 +1711,16 @@ function PhysicsWorld({
 
       // Vertical Collision Check
       const playerBoxY = new THREE.Box3().setFromCenterAndSize(
-        new THREE.Vector3(camera.position.x, nextY - 0.9, camera.position.z), // Bottom-weighted box
-        new THREE.Vector3(playerRadius * 2, 1.8, playerRadius * 2),
+        new THREE.Vector3(
+          camera.position.x,
+          nextY - eyeHeight / 2,
+          camera.position.z,
+        ), // Bottom-weighted box
+        new THREE.Vector3(playerRadius * 2, eyeHeight, playerRadius * 2),
       );
 
       let collidesY = false;
-      let highestFloorY = 1.8; // Default ground level based on eye level
+      let highestFloorY = eyeHeight; // Default ground level based on current eye level
 
       for (const box of collisionBoxes) {
         if (playerBoxY.intersectsBox(box)) {
@@ -1692,10 +1732,10 @@ function PhysicsWorld({
             break; // Stop checking
           } else if (
             playerVel.current.y <= 0 &&
-            camera.position.y - 1.8 >= box.max.y - 0.2
+            camera.position.y - eyeHeight >= box.max.y - 0.2
           ) {
             // Landing on top
-            highestFloorY = Math.max(highestFloorY, box.max.y + 1.8);
+            highestFloorY = Math.max(highestFloorY, box.max.y + eyeHeight);
             collidesY = true;
           } else if (playerVel.current.y > 0 && camera.position.y < box.min.y) {
             // Hitting head
@@ -1704,7 +1744,7 @@ function PhysicsWorld({
         }
       }
 
-      if (!collidesY && nextY >= 1.8) {
+      if (!collidesY && nextY >= eyeHeight) {
         camera.position.y = nextY;
       } else {
         if (collidesY && playerVel.current.y <= 0) {
@@ -1715,12 +1755,12 @@ function PhysicsWorld({
       }
 
       // Ground check (as a hard fallback)
-      if (camera.position.y <= 1.81) {
-        camera.position.y = Math.max(1.8, camera.position.y);
+      if (camera.position.y <= eyeHeight + 0.01) {
+        camera.position.y = Math.max(eyeHeight, camera.position.y);
         isOnGround = true;
       }
 
-      if (keys.current["Space"] && isOnGround) {
+      if (keys.current["Space"] && isOnGround && !isCrouching) {
         playerVel.current.y = jumpForce;
       }
     }
@@ -1989,6 +2029,131 @@ function AK47Model() {
   );
 }
 
+function DeagleModel() {
+  return (
+    <group rotation={[0, 0, 0]}>
+      {/* Upper Slide - Rear Heavy Part with Serrations */}
+      <mesh position={[0, 0.08, -0.05]}>
+        <boxGeometry args={[0.076, 0.082, 0.3]} />
+        <meshStandardMaterial color="#f8f8f8" metalness={1} roughness={0.02} />
+      </mesh>
+      {/* Rear Slide Serrations */}
+      {Array.from({length: 8}).map((_, i) => (
+        <group key={i} position={[0, 0.08, -0.04 - i * 0.02]}>
+          <mesh position={[0.0385, 0, 0]}>
+            <boxGeometry args={[0.001, 0.05, 0.008]} />
+            <meshStandardMaterial color="#333" />
+          </mesh>
+          <mesh position={[-0.0385, 0, 0]}>
+            <boxGeometry args={[0.001, 0.05, 0.008]} />
+            <meshStandardMaterial color="#333" />
+          </mesh>
+        </group>
+      ))}
+      
+      {/* Upper Slide - Front Lower Part with Rail and Muzzle Brake */}
+      <group position={[0, 0.065, -0.3]}>
+        <mesh position={[0, -0.005, 0]}>
+          <boxGeometry args={[0.072, 0.07, 0.25]} />
+          <meshStandardMaterial color="#fcfcfc" metalness={1} roughness={0.05} />
+        </mesh>
+        {/* Muzzle Brake Vents (Detailed side vents) */}
+        {[ -0.09, -0.06, -0.03 ].map((zOffset, i) => (
+          <group key={i} position={[0, 0.015, -0.08 + zOffset]}>
+            <mesh position={[0.0355, 0, 0]}>
+               <boxGeometry args={[0.002, 0.055, 0.018]} />
+               <meshStandardMaterial color="#000" />
+            </mesh>
+            <mesh position={[-0.0355, 0, 0]}>
+               <boxGeometry args={[0.002, 0.055, 0.018]} />
+               <meshStandardMaterial color="#000" />
+            </mesh>
+          </group>
+        ))}
+      </group>
+
+      {/* Rail on top - Weaver/Picatinny style */}
+      <mesh position={[0, 0.125, -0.2]}>
+        <boxGeometry args={[0.032, 0.025, 0.5]} />
+        <meshStandardMaterial color="#555" metalness={0.9} />
+      </mesh>
+      {/* Rail slots across the top */}
+      {Array.from({length: 12}).map((_, i) => (
+        <mesh key={i} position={[0, 0.138, -0.42 + i * 0.04]}>
+          <boxGeometry args={[0.04, 0.006, 0.012]} />
+          <meshStandardMaterial color="#000" />
+        </mesh>
+      ))}
+
+      {/* Lower frame - Chrome/Steel body */}
+      <mesh position={[0, 0.012, -0.08]}>
+        <boxGeometry args={[0.074, 0.078, 0.44]} />
+        <meshStandardMaterial color="#f0f0f0" metalness={1} roughness={0.05} />
+      </mesh>
+
+      {/* Slide Stop Lever */}
+      <mesh position={[0.04, 0.04, -0.1]}>
+        <boxGeometry args={[0.005, 0.015, 0.08]} />
+        <meshStandardMaterial color="#222" />
+      </mesh>
+
+      {/* Magazine Release */}
+      <mesh position={[0.04, -0.03, -0.02]} rotation={[0, 0, Math.PI/2]}>
+        <cylinderGeometry args={[0.01, 0.01, 0.005, 12]} />
+        <meshStandardMaterial color="#222" />
+      </mesh>
+
+      {/* Textured Grip with Logo Medallion */}
+      <group position={[0, -0.16, 0.06]} rotation={[0.18, 0, 0]}>
+        <mesh>
+          <boxGeometry args={[0.086, 0.3, 0.15]} />
+          <meshStandardMaterial color="#111111" roughness={1} />
+        </mesh>
+        {/* Grip Pattern Overlay */}
+        <mesh position={[0.044, 0, 0]}>
+           <planeGeometry args={[0.12, 0.22]} />
+           <meshStandardMaterial color="#080808" roughness={1} />
+        </mesh>
+        <mesh position={[-0.044, 0, 0]} rotation={[0, Math.PI, 0]}>
+           <planeGeometry args={[0.12, 0.22]} />
+           <meshStandardMaterial color="#080808" roughness={1} />
+        </mesh>
+        {/* Medallion */}
+        <mesh position={[0.046, 0.02, 0]} rotation={[0, Math.PI/2, 0]}>
+           <cylinderGeometry args={[0.022, 0.022, 0.005, 16]} />
+           <meshStandardMaterial color="#aaa" metalness={0.8} roughness={0.2} />
+        </mesh>
+        <mesh position={[-0.046, 0.02, 0]} rotation={[0, -Math.PI/2, 0]}>
+           <cylinderGeometry args={[0.022, 0.022, 0.005, 16]} />
+           <meshStandardMaterial color="#aaa" metalness={0.8} roughness={0.2} />
+        </mesh>
+      </group>
+
+      {/* Hammer - Extended look */}
+      <mesh position={[0, 0.13, 0.12]} rotation={[-0.8, 0, 0]}>
+        <boxGeometry args={[0.02, 0.05, 0.12]} />
+        <meshStandardMaterial color="#000" />
+      </mesh>
+
+      {/* Sights - Target style */}
+      <mesh position={[0, 0.145, 0.08]}>
+        <boxGeometry args={[0.03, 0.03, 0.03]} />
+        <meshStandardMaterial color="#000" />
+      </mesh>
+      <mesh position={[0, 0.148, -0.42]}>
+        <boxGeometry args={[0.015, 0.045, 0.02]} />
+        <meshStandardMaterial color="#000" />
+      </mesh>
+      
+      {/* Markings details - Engraving look */}
+      <mesh position={[0.04, 0.055, -0.12]} rotation={[0, Math.PI/2, 0]}>
+        <planeGeometry args={[0.14, 0.025]} />
+        <meshStandardMaterial color="#000" transparent opacity={0.6} />
+      </mesh>
+    </group>
+  );
+}
+
 function Weapon({
   type,
   themeColor,
@@ -2109,6 +2274,9 @@ function Weapon({
             <meshStandardMaterial color="#1a1a1a" />
           </mesh>
         </group>
+      )}
+      {type === "DEAGLE" && (
+        <DeagleModel />
       )}
       {type === "AK47" && (
         <AK47Model />
@@ -2700,35 +2868,58 @@ function Environment({
 
       {/* Floor */}
       {mode !== GameMode.MAP && (
-        <mesh
-          rotation={[-Math.PI / 2, 0, 0]}
-          position={[0, mode === GameMode.POP_BOTS ? 0 : -1, 0]}
-          receiveShadow
-        >
-          <planeGeometry args={[200, 200]} />
-          <meshStandardMaterial
-            color={
-              theme === "light"
-                ? "#eeeeee"
-                : theme === "retro"
-                  ? "#0f0f1b"
-                  : "#050505"
-            }
+        <group>
+          <mesh
+            rotation={[-Math.PI / 2, 0, 0]}
+            position={[0, mode === GameMode.POP_BOTS ? 0 : -1, 0]}
+            receiveShadow
+          >
+            <planeGeometry args={[2000, 2000]} />
+            <meshStandardMaterial
+              color={
+                theme === "light"
+                  ? "#eeeeee"
+                  : theme === "retro"
+                    ? "#0f0f1b"
+                    : "#050505"
+              }
+            />
+          </mesh>
+          <Grid
+            args={[200, 200]}
+            sectionSize={1}
+            sectionThickness={0.5}
+            sectionColor="#1a1a1a"
+            cellSize={0.25}
+            cellThickness={0.2}
+            cellColor="#080808"
+            fadeDistance={150}
+            fadeStrength={10}
+            position={[0, mode === GameMode.POP_BOTS ? 0.02 : -0.98, 0]}
+            infiniteGrid
           />
-        </mesh>
-      )}
-
-      {/* Grid Floor - Only for trainers, not for MAP mode */}
-      {mode !== GameMode.MAP && (
-        <gridHelper
-          args={[
-            200,
-            100,
-            themeColor,
-            theme === "light" ? "#dddddd" : "#171717",
-          ]}
-          position={[0, -0.99, 0]}
-        />
+          {/* Brighter Axis Lines (Glow effect) with depth offset */}
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, mode === GameMode.POP_BOTS ? 0.05 : -0.95, 0]}>
+            <planeGeometry args={[0.1, 2000]} />
+            <meshBasicMaterial 
+              color={themeColor} 
+              transparent 
+              opacity={0.9} 
+              polygonOffset 
+              polygonOffsetFactor={-1}
+            />
+          </mesh>
+          <mesh rotation={[-Math.PI / 2, 0, Math.PI / 2]} position={[0, mode === GameMode.POP_BOTS ? 0.05 : -0.95, 0]}>
+            <planeGeometry args={[0.1, 2000]} />
+            <meshBasicMaterial 
+              color={themeColor} 
+              transparent 
+              opacity={0.9} 
+              polygonOffset 
+              polygonOffsetFactor={-1}
+            />
+          </mesh>
+        </group>
       )}
 
       {/* Voxel Obstacles for MAP mode */}

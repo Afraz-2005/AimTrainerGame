@@ -185,8 +185,8 @@ export default function Settings({ settings, onUpdate }: SettingsProps) {
         <div className="col-span-full border-t border-zinc-800 pt-6 mt-6 grid grid-cols-1 md:grid-cols-3 gap-8">
           <section>
             <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3 italic">Weapon Select</h3>
-            <div className="grid grid-cols-3 gap-2">
-              {(['PISTOL', 'AK47', 'AWP'] as const).map(w => (
+            <div className="grid grid-cols-4 gap-2">
+              {(['PISTOL', 'DEAGLE', 'AK47', 'AWP'] as const).map(w => (
                 <button 
                   key={w}
                   onClick={() => onUpdate({ ...settings, popBots: { ...settings.popBots, weapon: w } })}
@@ -306,8 +306,8 @@ export default function Settings({ settings, onUpdate }: SettingsProps) {
 
           <section>
             <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3 italic">Weapon & Difficulty</h3>
-            <div className="grid grid-cols-3 gap-2 mb-4">
-              {(['PISTOL', 'AK47', 'AWP'] as const).map(w => (
+            <div className="grid grid-cols-4 gap-2 mb-4">
+              {(['PISTOL', 'DEAGLE', 'AK47', 'AWP'] as const).map(w => (
                 <button 
                   key={w}
                   onClick={() => onUpdate({ ...settings, popBots: { ...settings.popBots, weapon: w } })}

@@ -13,7 +13,7 @@ export enum GameMode {
   REACTION = 'REACTION',
 }
 
-export type WeaponType = 'PISTOL' | 'AK47' | 'AWP' | 'KNIFE';
+export type WeaponType = 'PISTOL' | 'DEAGLE' | 'AK47' | 'AWP' | 'KNIFE';
 export type Difficulty = 'EASY' | 'MEDIUM' | 'HARD';
 
 export interface PopBotsSettings {
