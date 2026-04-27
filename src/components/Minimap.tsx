@@ -11,7 +11,7 @@ interface MinimapProps {
 
 export default function Minimap({ playerPos, playerYaw, targets, hudColor }: MinimapProps) {
   const size = 150;
-  const mapRange = 120; // -60 to 60
+  const mapRange = 300; // -150 to 150
   const scale = size / mapRange;
   const center = size / 2;
 

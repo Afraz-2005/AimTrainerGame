@@ -305,8 +305,8 @@ export default function Settings({ settings, onUpdate }: SettingsProps) {
           </section>
 
           <section>
-            <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3 italic">Weapon Select</h3>
-            <div className="grid grid-cols-3 gap-2">
+            <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3 italic">Weapon & Difficulty</h3>
+            <div className="grid grid-cols-3 gap-2 mb-4">
               {(['PISTOL', 'AK47', 'AWP'] as const).map(w => (
                 <button 
                   key={w}
@@ -319,6 +319,24 @@ export default function Settings({ settings, onUpdate }: SettingsProps) {
                 </button>
               ))}
             </div>
+            {settings.map.botsHitBack && (
+              <div className="space-y-2 mt-4">
+                <h4 className="text-[10px] font-mono text-zinc-500 uppercase">Bot Difficulty (Hit Back)</h4>
+                <div className="grid grid-cols-3 gap-2">
+                  {(['EASY', 'MEDIUM', 'HARD'] as const).map(d => (
+                    <button 
+                      key={d}
+                      onClick={() => onUpdate({ ...settings, map: { ...settings.map, difficulty: d } })}
+                      className={`py-2 text-[10px] font-bold uppercase transition-all ${
+                        settings.map.difficulty === d ? 'bg-white text-black' : 'bg-zinc-800 text-zinc-400 hover:bg-lime-400 hover:text-black'
+                      }`}
+                    >
+                      {d}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </section>
         </div>
       )}

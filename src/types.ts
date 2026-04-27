@@ -28,6 +28,7 @@ export interface MapSettings {
   botsToKill: number;
   infiniteAmmo: boolean;
   isStaticBots: boolean;
+  difficulty: Difficulty;
 }
 
 export interface CrosshairSettings {
@@ -82,4 +83,5 @@ export interface TargetData {
   size: number;
   spawnIndex?: number;
   health: number;
+  isSniper?: boolean;
 }

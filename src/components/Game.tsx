@@ -8,77 +8,380 @@ import {
 } from "@react-three/drei";
 import * as THREE from "three";
 import confetti from "canvas-confetti";
+
+const createGrassTexture = () => {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    ctx.fillStyle = '#3B5E2B';
+    ctx.fillRect(0, 0, 256, 256);
+    for(let i=0; i<5000; i++) {
+        ctx.fillStyle = Math.random() > 0.5 ? '#365324' : '#456a33';
+        ctx.fillRect(Math.random()*256, Math.random()*256, 2, 4);
+    }
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(50, 50);
+  return tex;
+}
+
+const createWoodTexture = () => {
+  const canvas = document.createElement('canvas');
+  canvas.width = 64;
+  canvas.height = 64;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    ctx.fillStyle = '#7d5c3d';
+    ctx.fillRect(0, 0, 64, 64);
+    // Plank lines
+    ctx.fillStyle = '#5c402d';
+    for(let i=0; i<4; i++) {
+      ctx.fillRect(i * 16, 0, 1, 64);
+    }
+    // Grain
+    for(let i=0; i<200; i++) {
+      ctx.fillStyle = 'rgba(70, 40, 20, 0.3)';
+      ctx.fillRect(Math.random()*64, Math.random()*64, 1, Math.random()*10);
+    }
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(4, 4);
+  return tex;
+}
+
+const createCobbleTexture = () => {
+  const canvas = document.createElement('canvas');
+  canvas.width = 64;
+  canvas.height = 64;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    ctx.fillStyle = '#777777';
+    ctx.fillRect(0, 0, 64, 64);
+    for(let y=0; y<4; y++) {
+      for(let x=0; x<4; x++) {
+        ctx.fillStyle = (x+y) % 2 === 0 ? '#666666' : '#888888';
+        ctx.fillRect(x*16+1, y*16+1, 14, 14);
+        ctx.fillStyle = 'rgba(0,0,0,0.2)';
+        ctx.fillRect(x*16, y*16, 16, 1);
+        ctx.fillRect(x*16, y*16, 1, 16);
+      }
+    }
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(8, 8);
+  return tex;
+}
+
+const grassTexture = createGrassTexture();
+const woodTexture = createWoodTexture();
+const cobbleTexture = createCobbleTexture();
+
 import { motion } from "motion/react";
 import { GameSettings, GameStats, GameMode, TargetData } from "../types";
 import { playSound } from "../lib/audio";
 
 // Map Elements defining visuals and collisions
-export const MAP_ELEMENTS = [
-  // Outer Bounds
-  { pos: [0, 10, -60], size: [120, 20, 2], color: "#2c3e50" },
-  { pos: [0, 10, 60], size: [120, 20, 2], color: "#2c3e50" },
-  { pos: [-60, 10, 0], size: [2, 20, 120], color: "#2c3e50" },
-  { pos: [60, 10, 0], size: [2, 20, 120], color: "#2c3e50" },
+const rawMapElements: { pos: number[]; size: number[]; color: string; isWater?: boolean; isJumpPad?: boolean; isGrass?: boolean; isWood?: boolean; isCobblestone?: boolean }[] = [
+  // Outer Bounds (300x300 now)
+  { pos: [0, 20, -150], size: [300, 40, 2], color: "#3a4a5a" },
+  { pos: [0, 20, 150], size: [300, 40, 2], color: "#3a4a5a" },
+  { pos: [-150, 20, 0], size: [2, 40, 300], color: "#3a4a5a" },
+  { pos: [150, 20, 0], size: [2, 40, 300], color: "#3a4a5a" },
 
-  // Mid Walls (Splitting map)
-  { pos: [-17.5, 6, -10], size: [35, 12, 2], color: "#34495e" },
-  { pos: [27.5, 6, -10], size: [35, 12, 2], color: "#34495e" }, // Gap [0, 10]
-  { pos: [5, 10, -10], size: [10, 4, 2], color: "#34495e" }, // Top over door
+  // Ground base
+  { pos: [0, -1, 0], size: [300, 2, 300], color: "#3B2F2F" }, // soil base
+  { pos: [0, 0, 0], size: [300, 0.2, 300], color: "#556B2F", isGrass: true }, // grass top
 
-  // A Site (Right, X: 40)
-  { pos: [35, 1, -30], size: [20, 2, 20], color: "#8e44ad" }, // A Platform
-  { pos: [35, 3, -30], size: [4, 2, 4], color: "#5d6d7e" }, // A Crate Main
-  { pos: [28, 3, -25], size: [2, 2, 2], color: "#5d6d7e" }, // A Ninja Crate
-  { pos: [45, 6, -45], size: [6, 12, 6], color: "#9b59b6" }, // A Tower
+  // River / Pond (sunken into ground)
+  { pos: [0, 0.5, -25], size: [40, 1, 50], color: "#2d4a22" }, // Bottom
+  { pos: [0, 1.5, -25], size: [40, 1, 50], color: "#1ca3ec", isWater: true }, // Water
 
-  // A Stairs
-  { pos: [25, 0.25, -30], size: [2, 0.5, 6], color: "#7f8c8d" },
-  { pos: [26, 0.75, -30], size: [2, 0.5, 6], color: "#7f8c8d" },
-  { pos: [27, 1.25, -30], size: [2, 0.5, 6], color: "#7f8c8d" },
-  { pos: [28, 1.75, -30], size: [2, 0.5, 6], color: "#7f8c8d" },
+  // Bridge over pond
+  { pos: [0, 2.5, -30], size: [8, 0.5, 20], color: "#8b5a2b" },
 
-  // A Long
-  { pos: [45, 1, 0], size: [3, 2, 3], color: "#5d6d7e" },
-  { pos: [50, 1, 20], size: [3, 2, 3], color: "#5d6d7e" },
-  { pos: [55, 6, -10], size: [10, 12, 40], color: "#34495e" },
+  // Bunker 1
+  { pos: [-80, 5.5, -20], size: [16, 1, 16], color: "#555", isCobblestone: true }, // roof
+  { pos: [-87.5, 2.5, -20], size: [1, 5, 16], color: "#444" },
+  { pos: [-72.5, 2.5, -20], size: [1, 5, 16], color: "#444" },
+  { pos: [-80, 2.5, -27.5], size: [16, 5, 1], color: "#444" },
+  { pos: [-85, 2.5, -12.5], size: [6, 5, 1], color: "#444" },
+  { pos: [-75, 2.5, -12.5], size: [6, 5, 1], color: "#444" },
+  { pos: [-80, 4.5, -12.5], size: [4, 1, 1], color: "#444" }, // above door
 
-  // B Site (Left, X: -35)
-  { pos: [-35, 6, -20], size: [20, 12, 2], color: "#34495e" }, // Front B Wall
-  { pos: [-24, 6, -30], size: [2, 12, 20], color: "#34495e" }, // Right B Wall
-  { pos: [-35, 1, -30], size: [16, 2, 16], color: "#9b59b6" }, // B Platform
-  { pos: [-35, 3, -30], size: [3, 2, 3], color: "#5d6d7e" }, // B Crate
+  // Bunker 2
+  { pos: [50, 5.5, -50], size: [16, 1, 16], color: "#555", isCobblestone: true }, // roof
+  { pos: [42.5, 2.5, -50], size: [1, 5, 16], color: "#444" },
+  { pos: [57.5, 2.5, -50], size: [1, 5, 16], color: "#444" },
+  { pos: [50, 2.5, -57.5], size: [16, 5, 1], color: "#444" },
+  { pos: [45, 2.5, -42.5], size: [6, 5, 1], color: "#444" },
+  { pos: [55, 2.5, -42.5], size: [6, 5, 1], color: "#444" },
+  { pos: [50, 4.5, -42.5], size: [4, 1, 1], color: "#444" }, // above door
 
-  // B Stairs
-  { pos: [-35, 0.25, -21.5], size: [6, 0.5, 1], color: "#7f8c8d" },
-  { pos: [-35, 0.75, -22.5], size: [6, 0.5, 1], color: "#7f8c8d" },
-  { pos: [-35, 1.25, -23.5], size: [6, 0.5, 1], color: "#7f8c8d" },
-  { pos: [-35, 1.75, -24.5], size: [6, 0.5, 1], color: "#7f8c8d" },
+  // Hollow House 1
+  { pos: [100, 7, -20], size: [14, 2, 14], color: "#8b0000" }, // roof
+  { pos: [100, 3, -25.5], size: [12, 6, 1], color: "#e3c565", isWood: true },
+  { pos: [94.5, 3, -20], size: [1, 6, 10], color: "#e3c565", isWood: true },
+  { pos: [105.5, 3, -20], size: [1, 6, 10], color: "#e3c565", isWood: true },
+  { pos: [96, 3, -14.5], size: [4, 6, 1], color: "#e3c565", isWood: true },
+  { pos: [104, 3, -14.5], size: [4, 6, 1], color: "#e3c565", isWood: true },
+  { pos: [100, 5, -14.5], size: [4, 2, 1], color: "#e3c565", isWood: true },
 
-  // B Tunnels (X: -40, Z: 10)
-  { pos: [-45, 6, 10], size: [2, 12, 30], color: "#2c3e50" }, // Tunnel L
-  { pos: [-30, 6, 10], size: [2, 12, 30], color: "#2c3e50" }, // Tunnel R
-  { pos: [-37.5, 11, 10], size: [15, 2, 30], color: "#2c3e50" }, // Tunnel Roof
-  { pos: [-37.5, 0.5, 10], size: [15, 1, 30], color: "#5d6d7e" }, // Tunnel Floor
+  // Hollow House 2 (Elevated)
+  { pos: [-60, 4, -50], size: [40, 8, 40], color: "#4b5320" }, // Hill
+  { pos: [-60, 15, -45], size: [14, 2, 14], color: "#8b0000" }, // roof
+  { pos: [-60, 11, -50.5], size: [12, 6, 1], color: "#e3c565" },
+  { pos: [-65.5, 11, -45], size: [1, 6, 10], color: "#e3c565" },
+  { pos: [-54.5, 11, -45], size: [1, 6, 10], color: "#e3c565" },
+  { pos: [-64, 11, -39.5], size: [4, 6, 1], color: "#e3c565" },
+  { pos: [-56, 11, -39.5], size: [4, 6, 1], color: "#e3c565" },
+  { pos: [-60, 13, -39.5], size: [4, 2, 1], color: "#e3c565" },
 
-  // Mid
-  { pos: [5, 1, 5], size: [4, 2, 4], color: "#5d6d7e" }, // Mid Crate
-  { pos: [0, 4, 30], size: [20, 8, 4], color: "#8e44ad" }, // T Mid Wall
-  { pos: [10, 1, 40], size: [4, 2, 4], color: "#5d6d7e" }, // Mid Box T
+  // Highgrounds
+  { pos: [80, 8, 80], size: [60, 16, 60], color: "#4b5320" }, // Mountain
+  { pos: [-100, 6, 90], size: [50, 12, 50], color: "#4b5320" }, // Hill 2
 
-  // T Spawn Box
-  { pos: [0, 2, 55], size: [10, 4, 8], color: "#34495e" },
+  // Sniper Tower Good Spot
+  { pos: [-100, 12, -100], size: [16, 16, 16], color: "#444" },
+  { pos: [-100, 24, -100], size: [12, 8, 12], color: "#8a8d8f" },
 
-  // Additional Cover in Mid/CT
-  { pos: [-10, 1, -20], size: [2, 2, 2], color: "#5d6d7e" },
-  { pos: [10, 1.5, -25], size: [4, 3, 2], color: "#5d6d7e" },
+  // Big Tree 1 with Treehouse
+  { pos: [80, 15, -80], size: [4, 30, 4], color: "#3e2723" }, // trunk
+  { pos: [80, 32, -80], size: [20, 10, 20], color: "#1b5e20" }, // leaves
+  { pos: [80, 40, -80], size: [12, 8, 12], color: "#2e7d32" }, // leaves
+  { pos: [88, 15, -80], size: [12, 1, 12], color: "#8d6e63" }, // platform
+  { pos: [88, 20, -80], size: [12, 1, 12], color: "#5d4037" }, // roof
+  { pos: [88, 17.5, -85.5], size: [12, 4, 1], color: "#795548" }, // wall
+  { pos: [88, 0.5, -80], size: [4, 1, 4], color: "#00ff00", isJumpPad: true }, // bounce to treehouse
+
+  // Big Tree 2 with Treehouse
+  { pos: [-80, 15, -100], size: [4, 30, 4], color: "#3e2723" }, // trunk
+  { pos: [-80, 32, -100], size: [20, 10, 20], color: "#1b5e20" }, // leaves
+  { pos: [-72, 15, -100], size: [12, 1, 12], color: "#8d6e63" }, // platform
+  { pos: [-72, 0.5, -100], size: [4, 1, 4], color: "#00ff00", isJumpPad: true }, // bounce
+
+  // Cobblestone Pillars
+  { pos: [30, 10, -80], size: [4, 20, 4], color: "#757575" },
+  { pos: [40, 15, -80], size: [4, 30, 4], color: "#757575" },
+  { pos: [35, 12.5, -70], size: [4, 25, 4], color: "#757575" },
+
+  // Bomb sites
+  { pos: [120, 0.25, 0], size: [30, 0.5, 30], color: "#b71c1c" }, // A site
+  { pos: [120, 2, 0], size: [4, 4, 4], color: "#d32f2f" },
+  { pos: [-20, 0.25, 120], size: [30, 0.5, 30], color: "#0d47a1" }, // B site
+  { pos: [-20, 2, 120], size: [4, 4, 4], color: "#1976d2" },
+
+  // Crates
+  { pos: [-40, 1.5, 20], size: [3, 3, 3], color: "#8b5a2b" },
+  { pos: [-44, 1.5, 22], size: [3, 3, 3], color: "#8b5a2b" },
+  { pos: [-42, 4.5, 21], size: [3, 3, 3], color: "#8b5a2b" },
+
+  // Fallen trees (Logs)
+  { pos: [-60, 1.5, 50], size: [4, 4, 20], color: "#5c4033" },
+  { pos: [40, 1.5, 80], size: [20, 4, 4], color: "#5c4033" },
+
+  // Broken down cars
+  { pos: [-20, 1.5, -80], size: [8, 3, 16], color: "#bd3333" }, // base
+  { pos: [-20, 4.5, -80], size: [6, 3, 8], color: "#222" }, // cabin
 ];
 
-const MAP_COLLISION_BOXES = MAP_ELEMENTS.map((el) => {
-  return new THREE.Box3().setFromCenterAndSize(
-    new THREE.Vector3(el.pos[0], el.pos[1], el.pos[2]),
-    new THREE.Vector3(el.size[0], el.size[1], el.size[2]),
-  );
-});
+// Pyramid Monument
+for (let i = 0; i < 10; i++) {
+  rawMapElements.push({ pos: [-100, 1 + i*2, 0], size: [20 - i*2, 2, 20 - i*2], color: "#e0e0e0" }); // white monument
+}
+
+// Bushes
+for (let i = 0; i < 50; i++) {
+  const bx = (Math.random() - 0.5) * 260;
+  const bz = (Math.random() - 0.5) * 260;
+  if (Math.abs(bx) > 10) { // keep away from zero
+    rawMapElements.push({ pos: [bx, 1.5, bz], size: [3, 3, 3], color: "#2e7d32" });
+  }
+}
+
+// Jump pads randomly around
+for(let i=0; i<15; i++) {
+  const jx = (Math.random() - 0.5)*200;
+  const jz = (Math.random() - 0.5)*200;
+  rawMapElements.push({ pos: [jx, 0.25, jz], size: [3, 0.5, 3], color: "#00e676", isJumpPad: true });
+}
+
+// Stairs up sniper tower (around the back)
+for(let i = 0; i < 20; i++) {
+  rawMapElements.push({ pos: [-100, 4 + i * 0.7, -90 + i * 1.5], size: [6, 1, 2], color: "#5c4033" }); // Ramp steps
+}
+
+// ---- Roads ----
+// Main horizontal road
+rawMapElements.push({ pos: [0, 0.4, 60], size: [200, 0.2, 12], color: "#555" });
+rawMapElements.push({ pos: [0, 0.45, 60], size: [200, 0.1, 0.5], color: "#e0e0e0" }); // road line
+// Main vertical road
+rawMapElements.push({ pos: [40, 0.4, 0], size: [12, 0.2, 200], color: "#555" });
+rawMapElements.push({ pos: [40, 0.45, 0], size: [0.5, 0.1, 200], color: "#e0e0e0" }); // road line
+// Bridge Extension for Roads over water (if any)
+rawMapElements.push({ pos: [40, 2.5, -25], size: [12, 0.6, 50], color: "#444" });
+
+// ---- Pillager Outpost ----
+const outpostX = 110;
+const outpostZ = -40;
+rawMapElements.push({ pos: [outpostX, 10, outpostZ], size: [16, 20, 16], color: "#3e2723" }); // Dark oak wood tower
+rawMapElements.push({ pos: [outpostX, 18, outpostZ], size: [18, 2, 18], color: "#4e342e" }); // Floor
+rawMapElements.push({ pos: [outpostX, 22, outpostZ], size: [18, 4, 18], color: "#5d4037" }); // Roof top
+// Outpost legs
+rawMapElements.push({ pos: [outpostX - 7, 5, outpostZ - 7], size: [2, 10, 2], color: "#5c4033" });
+rawMapElements.push({ pos: [outpostX + 7, 5, outpostZ - 7], size: [2, 10, 2], color: "#5c4033" });
+rawMapElements.push({ pos: [outpostX - 7, 5, outpostZ + 7], size: [2, 10, 2], color: "#5c4033" });
+rawMapElements.push({ pos: [outpostX + 7, 5, outpostZ + 7], size: [2, 10, 2], color: "#5c4033" });
+// Outpost stair ramp
+for(let i = 0; i < 24; i++) {
+  rawMapElements.push({ pos: [outpostX - 10 - i * 1.5, i * 0.8, outpostZ], size: [2, 1, 4], color: "#5c4033" });
+}
+
+// ---- Giant Steve Statue ----
+const steveX = 0;
+const steveZ = -120;
+// Shoes/Feet
+rawMapElements.push({ pos: [steveX - 4, 3, steveZ], size: [8, 6, 8], color: "#555555" }); 
+rawMapElements.push({ pos: [steveX + 4, 3, steveZ], size: [8, 6, 8], color: "#555555" });
+// Legs (Blue pants)
+rawMapElements.push({ pos: [steveX - 4, 12, steveZ], size: [8, 12, 8], color: "#1a237e" }); 
+rawMapElements.push({ pos: [steveX + 4, 12, steveZ], size: [8, 12, 8], color: "#1a237e" });
+// Torso (Cyan shirt)
+rawMapElements.push({ pos: [steveX, 28, steveZ], size: [16, 20, 8], color: "#00838f" });
+// Arms
+rawMapElements.push({ pos: [steveX - 14, 28, steveZ], size: [8, 20, 8], color: "#d7ccc8" });
+rawMapElements.push({ pos: [steveX - 14, 36, steveZ], size: [8, 4, 8], color: "#00838f" }); // shoulder sleeves
+rawMapElements.push({ pos: [steveX + 14, 36, steveZ], size: [8, 4, 8], color: "#00838f" }); // shoulder sleeves
+// Arm pointing forward (Right Arm)
+rawMapElements.push({ pos: [steveX + 14, 28, steveZ + 10], size: [8, 8, 28], color: "#d7ccc8" });
+// Head (Skin tone)
+rawMapElements.push({ pos: [steveX, 44, steveZ], size: [16, 16, 16], color: "#d7ccc8" });
+// Hair
+rawMapElements.push({ pos: [steveX, 52, steveZ], size: [16.5, 4, 16.5], color: "#3e2723" });
+// Eyes
+rawMapElements.push({ pos: [steveX - 4, 46, steveZ + 8.1], size: [4, 2, 0.2], color: "#ffffff" });
+rawMapElements.push({ pos: [steveX - 3, 46, steveZ + 8.2], size: [2, 2, 0.2], color: "#3f51b5" }); // pupil
+rawMapElements.push({ pos: [steveX + 4, 46, steveZ + 8.1], size: [4, 2, 0.2], color: "#ffffff" });
+rawMapElements.push({ pos: [steveX + 5, 46, steveZ + 8.2], size: [2, 2, 0.2], color: "#3f51b5" }); // pupil
+
+export const MAP_ELEMENTS = rawMapElements;
+
+export const MAP_TREES = [
+  { pos: [45, 0.5, -20] },
+  { pos: [-45, 0.5, -5] },
+  { pos: [20, 0.5, 45] },
+  { pos: [-20, 0.5, 40] },
+  { pos: [0, 0.5, -45] },
+  { pos: [-120, 0.5, -120] },
+  { pos: [-120, 0.5, 120] },
+  { pos: [120, 0.5, 120] },
+  { pos: [60, 0.5, 100] },
+  { pos: [-80, 0.5, 80] },
+];
+
+export const SMALL_MAP_ELEMENTS: { pos: number[]; size: number[]; color: string; isWater?: boolean; isJumpPad?: boolean; isGrass?: boolean; isWood?: boolean; isCobblestone?: boolean }[] = [
+  // Bounds (100x100 area)
+  { pos: [0, 20, -50], size: [100, 40, 2], color: "#2c3e50" },
+  { pos: [0, 20, 50], size: [100, 40, 2], color: "#2c3e50" },
+  { pos: [-50, 20, 0], size: [2, 40, 100], color: "#2c3e50" },
+  { pos: [50, 20, 0], size: [2, 40, 100], color: "#2c3e50" },
+  
+  // Ground
+  { pos: [0, -1, 0], size: [100, 2, 100], color: "#3a2d24" },
+  { pos: [0, 0, 0], size: [100, 0.2, 100], color: "#3B5E2B", isGrass: true }, 
+
+  // Center structure
+  { pos: [0, 4, 0], size: [20, 8, 20], color: "#bda891" },
+  { pos: [0, 8, 0], size: [10, 8, 10], color: "#a6937e" },
+
+  // Corridors / Inner walls (L-shapes and T-shapes)
+  { pos: [-25, 4, 15], size: [30, 8, 4], color: "#bda891" },
+  { pos: [-12, 4, 25], size: [4, 8, 20], color: "#bda891" },
+
+  { pos: [25, 4, -15], size: [30, 8, 4], color: "#bda891" },
+  { pos: [12, 4, -25], size: [4, 8, 20], color: "#bda891" },
+
+  { pos: [15, 4, 25], size: [4, 8, 30], color: "#bda891" },
+  { pos: [25, 4, 38], size: [20, 8, 4], color: "#bda891" },
+
+  { pos: [-15, 4, -25], size: [4, 8, 30], color: "#bda891" },
+  { pos: [-25, 4, -38], size: [20, 8, 4], color: "#bda891" },
+
+  // Corners / Cover 
+  { pos: [-35, 2, -35], size: [6, 4, 6], color: "#544637", isWood: true },
+  { pos: [35, 2, 35], size: [6, 4, 6], color: "#544637", isWood: true },
+  { pos: [-38, 2, 38], size: [4, 4, 10], color: "#544637", isWood: true },
+  { pos: [38, 2, -38], size: [10, 4, 4], color: "#544637", isWood: true },
+
+  // Random boxes/crates for more cover
+  { pos: [-5, 1.5, -15], size: [3, 3, 3], color: "#75563c", isWood: true },
+  { pos: [-5, 4.5, -15], size: [3, 3, 3], color: "#75563c", isWood: true },
+  { pos: [15, 1.5, 5], size: [3, 3, 3], color: "#75563c", isWood: true },
+  { pos: [5, 1.5, 30], size: [2, 3, 8], color: "#75563c", isWood: true },
+  { pos: [-5, 1.5, 25], size: [4, 3, 4], color: "#75563c", isWood: true },
+  { pos: [30, 2, 5], size: [4, 4, 4], color: "#75563c", isWood: true },
+  { pos: [-30, 2, -5], size: [4, 4, 4], color: "#75563c", isWood: true },
+  { pos: [-15, 1.5, 15], size: [5, 3, 2], color: "#75563c", isWood: true },
+  
+  // Ramps/elevation for verticality
+  { pos: [-40, 1, 0], size: [8, 2, 20], color: "#a6937e" },
+  { pos: [40, 1, 0], size: [8, 2, 20], color: "#a6937e" },
+
+  // Central block cover
+  { pos: [0, 9, 0], size: [4, 2, 4], color: "#75563c" },
+];
+
+export const SMALL_MAP_TREES = [
+  { pos: [40, 0.5, 40] },
+  { pos: [-40, 0.5, -40] },
+  { pos: [40, 0.5, -40] },
+  { pos: [-40, 0.5, 40] },
+  { pos: [0, 0.5, 35] },
+  { pos: [35, 0.5, 0] },
+  { pos: [-35, 0.5, 0] },
+  { pos: [0, 0.5, -35] },
+];
+
+const MAP_COLLISION_BOXES = [
+  ...MAP_ELEMENTS.map((el) => {
+    const box: any = new THREE.Box3().setFromCenterAndSize(
+      new THREE.Vector3(el.pos[0], el.pos[1], el.pos[2]),
+      new THREE.Vector3(el.size[0], el.size[1], el.size[2]),
+    );
+    box.isJumpPad = el.isJumpPad;
+    return box;
+  }),
+  ...MAP_TREES.map((tree) => {
+    return new THREE.Box3().setFromCenterAndSize(
+      new THREE.Vector3(tree.pos[0], tree.pos[1] + 5, tree.pos[2]),
+      new THREE.Vector3(2, 10, 2), // tree trunk collision
+    );
+  })
+];
+
+const SMALL_MAP_COLLISION_BOXES = [
+  ...SMALL_MAP_ELEMENTS.map((el) => {
+    const box: any = new THREE.Box3().setFromCenterAndSize(
+      new THREE.Vector3(el.pos[0], el.pos[1], el.pos[2]),
+      new THREE.Vector3(el.size[0], el.size[1], el.size[2]),
+    );
+    box.isJumpPad = el.isJumpPad;
+    return box;
+  }),
+  ...SMALL_MAP_TREES.map((tree) => {
+    return new THREE.Box3().setFromCenterAndSize(
+      new THREE.Vector3(tree.pos[0], tree.pos[1] + 5, tree.pos[2]),
+      new THREE.Vector3(2, 10, 2),
+    );
+  })
+];
 
 interface GameProps {
   settings: GameSettings;
@@ -102,13 +405,18 @@ function CameraSync({
 
   useEffect(() => {
     if (countdown === 3 && !resetDone.current) {
-      if (mode === GameMode.MAP && botsHitBack) {
-        camera.position.set(-37.5, 2, 22); // Spawn deep inside B Tunnels
-        camera.rotation.set(0, 0, 0); // Face towards the tunnel exit (negative Z)
+      if (mode === GameMode.MAP) {
+        if (botsHitBack) {
+          camera.position.set(45, 6, 45); // Smaller map spawn
+          camera.rotation.set(0, Math.PI * 1.25, 0); // Look at center
+        } else {
+          camera.position.set(-37.5, 6, 22); // Orig map spawn above tunnels
+          camera.rotation.set(0, 0, 0); // Face towards the tunnel exit (negative Z)
+        }
       } else {
         // Force looking straight ahead at the target zone
         camera.rotation.set(0, 0, 0);
-        camera.position.set(0, 2, 0);
+        camera.position.set(0, 1.8, 0);
       }
       resetDone.current = true;
     } else if (countdown === null) {
@@ -133,6 +441,7 @@ export default function Game({
   const playerVel = useRef(new THREE.Vector3());
   const recoilIndex = useRef(0);
   const keys = useRef<{ [key: string]: boolean }>({});
+  const lastCombatTimeRef = useRef<number>(0);
 
   const getInitialAmmo = () => {
     if (settings.mode !== GameMode.MAP || settings.map.infiniteAmmo) return Infinity;
@@ -287,6 +596,15 @@ export default function Game({
 
       if (settings.mode === GameMode.MAP && !settings.map.isStaticBots) {
         statsRef.current.timeRemaining += 1;
+        
+        // Health Regeneration
+        if (settings.map.botsHitBack && Date.now() - lastCombatTimeRef.current > 7000) {
+          if (statsRef.current.health < 100) {
+            statsRef.current.health = Math.min(100, (statsRef.current.health || 0) + 5);
+            onUpdateStats({ ...statsRef.current });
+          }
+        }
+
         // End game when all target bots are eliminated, after initial spawn
         setTargets((currentTargets) => {
           if (
@@ -325,20 +643,28 @@ export default function Game({
 
   const getRandomMapPos = (): [number, number, number] => {
     let attempts = 0;
-    let finalPos: [number, number, number] = [0, 2, -20];
+    let finalPos: [number, number, number] = [0, 6, -20];
+    const isSmallMap = settings.mode === GameMode.MAP && settings.map.botsHitBack;
+    const collisionBoxes = isSmallMap ? SMALL_MAP_COLLISION_BOXES : MAP_COLLISION_BOXES;
+    const mapRange = isSmallMap ? 90 : 260; // -45 to 45 or -130 to 130
     while (attempts < 100) {
-      const x = (Math.random() - 0.5) * 100; // -50 to 50
-      const z = (Math.random() - 0.5) * 100; // -50 to 50
+      let x = (Math.random() - 0.5) * mapRange;
+      let z = (Math.random() - 0.5) * mapRange;
 
-      // Avoid spawning right on the player's spawn point (B Tunnels) when bots hit back
-      if (settings.map.botsHitBack && x < -25 && z > 5) {
-        attempts++;
-        continue;
+      if (isSmallMap) {
+        // Spawn tightly together near [-40, X, -40]
+        x = -40 + (Math.random() - 0.5) * 15;
+        z = -40 + (Math.random() - 0.5) * 15;
+      } else {
+        if (x < -25 && z > 5) {
+          attempts++;
+          continue;
+        }
       }
 
       let maxY = 0;
       const botRadius = 0.6;
-      for (const box of MAP_COLLISION_BOXES) {
+      for (const box of collisionBoxes) {
         if (
           x + botRadius > box.min.x &&
           x - botRadius < box.max.x &&
@@ -356,7 +682,7 @@ export default function Game({
       );
 
       let isColliding = false;
-      for (const box of MAP_COLLISION_BOXES) {
+      for (const box of collisionBoxes) {
         if (botBox.intersectsBox(box)) {
           isColliding = true;
           break;
@@ -390,6 +716,7 @@ export default function Game({
           position: getRandomMapPos(),
           size: 1.2,
           health: 100,
+          isSniper: settings.map.botsHitBack && i === 0,
         });
       } else {
         newTargets.push(generateTarget(settings.mode, usedIndices));
@@ -490,6 +817,7 @@ export default function Game({
     }
 
     statsRef.current.hits += 1;
+    lastCombatTimeRef.current = Date.now();
     updateAccuracy();
 
     setTargets((prev) => {
@@ -576,6 +904,7 @@ export default function Game({
         0,
         (statsRef.current.health || 100) - amount,
       );
+      lastCombatTimeRef.current = Date.now();
       onUpdateStats({ ...statsRef.current });
 
       if (statsRef.current.health <= 0 && !gameStatus) {
@@ -652,6 +981,12 @@ export default function Game({
 
   const handleFireTrigger = useCallback(() => {
     if (isReloading || isPaused || gameStatus) return false;
+
+    // In these modes, bypass weapon mechanics (ammo, etc.)
+    if (settings.mode === GameMode.GRIDSHOT || settings.mode === GameMode.SIXSHOT) {
+      return true;
+    }
+
     if (
       statsRef.current.ammo === Infinity ||
       settings.popBots.weapon === "KNIFE"
@@ -664,7 +999,7 @@ export default function Game({
       return true;
     }
     return false;
-  }, [isPaused, settings.popBots.weapon, onUpdateStats]);
+  }, [isPaused, settings.popBots.weapon, onUpdateStats, settings.mode, isReloading, gameStatus]);
 
   return (
     <div className="w-full h-full cursor-crosshair">
@@ -748,6 +1083,7 @@ export default function Game({
           onFireTrigger={handleFireTrigger}
           isReloading={isReloading}
           recoilIndex={recoilIndex}
+          difficulty={settings.mode === GameMode.MAP ? settings.map.difficulty : settings.popBots.difficulty}
         />
 
         <StatsSyncer 
@@ -762,6 +1098,7 @@ export default function Game({
           theme={settings.theme}
           themeColor={settings.themeColor}
           mode={settings.mode}
+          botsHitBack={settings.map?.botsHitBack}
         />
         {(settings.mode === GameMode.POP_BOTS ||
           settings.mode === GameMode.MAP) && (
@@ -1031,6 +1368,7 @@ function PhysicsWorld({
   onFireTrigger,
   isReloading,
   recoilIndex,
+  difficulty,
 }: {
   targets: TargetData[];
   onHit: (id: string, isHeadshot: boolean) => void;
@@ -1051,6 +1389,7 @@ function PhysicsWorld({
   onFireTrigger?: () => boolean;
   isReloading: boolean;
   recoilIndex: React.MutableRefObject<number>;
+  difficulty?: string;
 }) {
   const { camera, raycaster, scene } = useThree();
 
@@ -1149,7 +1488,8 @@ function PhysicsWorld({
 
     let closestObstacleDist = weapon === "KNIFE" ? 2.5 : Infinity;
     if (mode === GameMode.MAP) {
-      for (const box of MAP_COLLISION_BOXES) {
+      const collisionBoxes = botsHitBack ? SMALL_MAP_COLLISION_BOXES : MAP_COLLISION_BOXES; 
+      for (const box of collisionBoxes) {
         const intersectPoint = new THREE.Vector3();
         if (raycaster.ray.intersectBox(box, intersectPoint)) {
           const dist = raycaster.ray.origin.distanceTo(intersectPoint);
@@ -1326,6 +1666,8 @@ function PhysicsWorld({
 
     // Gravity and Jumping
     let isOnGround = false;
+    const collisionBoxes = botsHitBack ? SMALL_MAP_COLLISION_BOXES : MAP_COLLISION_BOXES;
+    
     if (mode === GameMode.MAP) {
       playerVel.current.y += gravity * delta;
 
@@ -1340,9 +1682,15 @@ function PhysicsWorld({
       let collidesY = false;
       let highestFloorY = 1.8; // Default ground level based on eye level
 
-      for (const box of MAP_COLLISION_BOXES) {
+      for (const box of collisionBoxes) {
         if (playerBoxY.intersectsBox(box)) {
-          if (
+          if ((box as any).isJumpPad) {
+            playerVel.current.y = 40; // massive jump
+            collidesY = false;
+            isOnGround = false;
+            camera.position.y += 0.5; // instantly boost out
+            break; // Stop checking
+          } else if (
             playerVel.current.y <= 0 &&
             camera.position.y - 1.8 >= box.max.y - 0.2
           ) {
@@ -1395,7 +1743,7 @@ function PhysicsWorld({
       let collides = false;
       let stepUpHeight = 0;
 
-      for (const mBox of MAP_COLLISION_BOXES) {
+      for (const mBox of collisionBoxes) {
         if (box.intersectsBox(mBox)) {
           const footY = camera.position.y - 1.8;
           // Check if we can step up (obstacle max Y is within 0.7 units above foot level)
@@ -1440,9 +1788,14 @@ function PhysicsWorld({
       camera.position.z = nextZ;
     }
 
-    // Hard Bounds - SHRUNK for better density
-    const limit = mode === GameMode.MAP ? 55 : 20;
-    const limitZ = mode === GameMode.MAP ? 55 : 20;
+    // Hard Bounds
+    let limit = 20;
+    let limitZ = 20;
+    if (mode === GameMode.MAP) {
+      const isSmallMap = botsHitBack;
+      limit = isSmallMap ? 48 : 145;
+      limitZ = isSmallMap ? 48 : 145;
+    }
     camera.position.x = Math.max(-limit, Math.min(limit, camera.position.x));
     camera.position.z = Math.max(-limitZ, Math.min(limitZ, camera.position.z));
   });
@@ -1451,9 +1804,13 @@ function PhysicsWorld({
     (e: MouseEvent) => {
       if (!document.pointerLockElement || isPaused || countdown !== null)
         return;
-      if (e.button === 0 && weapon !== "AK47") fireWeapon();
+      if (e.button === 0) {
+        if (mode === GameMode.GRIDSHOT || mode === GameMode.SIXSHOT || weapon !== "AK47") {
+          fireWeapon();
+        }
+      }
     },
-    [isPaused, countdown, weapon, fireWeapon],
+    [isPaused, countdown, weapon, fireWeapon, mode],
   );
 
   useEffect(() => {
@@ -1475,6 +1832,7 @@ function PhysicsWorld({
             isPaused={isPaused || countdown !== null}
             botsHitBack={botsHitBack}
             isStaticBots={isStaticBots}
+            difficulty={difficulty}
           />
         ) : (
           <VoxelTarget
@@ -1515,6 +1873,119 @@ function PhysicsWorld({
         </line>
       ))}
     </>
+  );
+}
+
+function AWPModel() {
+  return (
+    <group rotation={[0, 0, 0]}>
+      {/* Body */}
+      <mesh position={[0, 0, -0.1]}>
+        <boxGeometry args={[0.1, 0.2, 0.8]} />
+        <meshStandardMaterial color="#3a5a3a" />
+      </mesh>
+      {/* Stock */}
+      <mesh position={[0, -0.05, 0.6]}>
+        <boxGeometry args={[0.08, 0.25, 0.6]} />
+        <meshStandardMaterial color="#3a5a3a" />
+      </mesh>
+      {/* Scope */}
+      <mesh position={[0, 0.18, -0.1]} rotation={[Math.PI / 2, 0, 0]}>
+        <cylinderGeometry args={[0.05, 0.05, 0.5, 12]} />
+        <meshStandardMaterial color="#111" />
+      </mesh>
+      {/* Barrel */}
+      <mesh position={[0, 0.05, -1.2]} rotation={[Math.PI / 2, 0, 0]}>
+        <cylinderGeometry args={[0.03, 0.03, 1.4, 10]} />
+        <meshStandardMaterial color="#111" />
+      </mesh>
+    </group>
+  );
+}
+
+function AK47Model() {
+  return (
+    <group rotation={[0, 0, 0]}>
+      {/* Receiver */}
+      <mesh position={[0, -0.01, -0.1]}>
+        <boxGeometry args={[0.065, 0.12, 0.5]} />
+        <meshStandardMaterial color="#222" metalness={0.7} roughness={0.3} />
+      </mesh>
+      {/* Dust cover */}
+      <mesh position={[0, 0.06, -0.11]}>
+        <boxGeometry args={[0.063, 0.04, 0.48]} />
+        <meshStandardMaterial color="#1a1a1a" metalness={0.8} roughness={0.4} />
+      </mesh>
+      {/* Rear Sight Block */}
+      <mesh position={[0, 0.08, -0.3]}>
+        <boxGeometry args={[0.05, 0.05, 0.1]} />
+        <meshStandardMaterial color="#111" metalness={0.7} roughness={0.4} />
+      </mesh>
+      {/* Grip */}
+      <mesh position={[0, -0.18, 0.08]} rotation={[0.3, 0, 0]}>
+        <boxGeometry args={[0.06, 0.22, 0.09]} />
+        <meshStandardMaterial color="#3a2211" roughness={0.9} />
+      </mesh>
+      {/* Stock */}
+      <mesh position={[0, -0.04, 0.35]} rotation={[0.04, 0, 0]}>
+        <boxGeometry args={[0.06, 0.16, 0.4]} />
+        <meshStandardMaterial color="#4d2b15" roughness={0.9} />
+      </mesh>
+      {/* Stock detail cut */}
+      <mesh position={[0, -0.04, 0.55]} rotation={[0.04, 0, 0]}>
+        <boxGeometry args={[0.062, 0.165, 0.02]} />
+        <meshStandardMaterial color="#111" metalness={0.6} roughness={0.5} />
+      </mesh>
+      {/* Magazine - curved */}
+      <group position={[0, 0, -0.15]}>
+        <mesh position={[0, -0.15, 0]}>
+          <boxGeometry args={[0.055, 0.15, 0.13]} />
+          <meshStandardMaterial color="#111" metalness={0.8} roughness={0.5} />
+        </mesh>
+        <mesh position={[0, -0.27, -0.02]} rotation={[0.15, 0, 0]}>
+          <boxGeometry args={[0.055, 0.15, 0.13]} />
+          <meshStandardMaterial color="#111" metalness={0.8} roughness={0.5} />
+        </mesh>
+        <mesh position={[0, -0.38, -0.06]} rotation={[0.3, 0, 0]}>
+          <boxGeometry args={[0.055, 0.12, 0.13]} />
+          <meshStandardMaterial color="#111" metalness={0.8} roughness={0.5} />
+        </mesh>
+      </group>
+      {/* Lower Handguard */}
+      <mesh position={[0, 0.0, -0.48]}>
+        <boxGeometry args={[0.08, 0.1, 0.25]} />
+        <meshStandardMaterial color="#4d2b15" roughness={0.9} />
+      </mesh>
+      {/* Upper Handguard (Gas tube cover) */}
+      <mesh position={[0, 0.07, -0.48]}>
+        <boxGeometry args={[0.07, 0.06, 0.22]} />
+        <meshStandardMaterial color="#4d2b15" roughness={0.9} />
+      </mesh>
+      {/* Gas block */}
+      <mesh position={[0, 0.07, -0.65]}>
+        <boxGeometry args={[0.03, 0.06, 0.1]} />
+        <meshStandardMaterial color="#222" metalness={0.7} roughness={0.3} />
+      </mesh>
+      <mesh position={[0, 0.04, -0.68]}>
+        <boxGeometry args={[0.03, 0.08, 0.04]} />
+        <meshStandardMaterial color="#222" metalness={0.7} roughness={0.3} />
+      </mesh>
+      {/* Barrel */}
+      <mesh position={[0, 0.03, -0.75]} rotation={[Math.PI / 2, 0, 0]}>
+        <cylinderGeometry args={[0.015, 0.02, 0.8, 12]} />
+        <meshStandardMaterial color="#111" metalness={0.9} roughness={0.3} />
+      </mesh>
+      {/* Front Sight */}
+      <mesh position={[0, 0.06, -1.05]}>
+        <boxGeometry args={[0.02, 0.08, 0.04]} />
+        <meshStandardMaterial color="#111" metalness={0.8} roughness={0.4} />
+      </mesh>
+      {/* Cleaning rod */}
+      <mesh position={[0, -0.01, -0.8]} rotation={[Math.PI / 2, 0, 0]}>
+        <cylinderGeometry args={[0.005, 0.005, 0.6, 8]} />
+        <meshStandardMaterial color="#444" metalness={0.8} roughness={0.4} />
+      </mesh>
+    </group>
   );
 }
 
@@ -1640,38 +2111,7 @@ function Weapon({
         </group>
       )}
       {type === "AK47" && (
-        <group rotation={[0, 0, 0]}>
-          {/* Receiver */}
-          <mesh position={[0, 0, -0.1]}>
-            <boxGeometry args={[0.06, 0.12, 0.5]} />
-            <meshStandardMaterial color="#1a1a1a" />
-          </mesh>
-          {/* Stock */}
-          <mesh position={[0, -0.05, 0.35]} rotation={[0.1, 0, 0]}>
-            <boxGeometry args={[0.05, 0.18, 0.4]} />
-            <meshStandardMaterial color="#4d3319" />
-          </mesh>
-          {/* Handguard */}
-          <mesh position={[0, -0.04, -0.45]}>
-            <boxGeometry args={[0.08, 0.1, 0.3]} />
-            <meshStandardMaterial color="#4d3319" />
-          </mesh>
-          {/* Grip */}
-          <mesh position={[0, -0.18, 0.05]} rotation={[0.3, 0, 0]}>
-            <boxGeometry args={[0.06, 0.22, 0.1]} />
-            <meshStandardMaterial color="#4d3319" />
-          </mesh>
-          {/* Mag */}
-          <mesh position={[0, -0.28, -0.15]} rotation={[-0.4, 0, 0]}>
-            <boxGeometry args={[0.05, 0.3, 0.12]} />
-            <meshStandardMaterial color="#111" />
-          </mesh>
-          {/* Barrel */}
-          <mesh position={[0, 0.03, -0.8]} rotation={[Math.PI / 2, 0, 0]}>
-            <cylinderGeometry args={[0.02, 0.02, 0.6, 8]} />
-            <meshStandardMaterial color="#111" />
-          </mesh>
-        </group>
+        <AK47Model />
       )}
       {type === "AWP" && (
         <group rotation={[0, 0, 0]}>
@@ -1768,6 +2208,7 @@ function PlayerBot({
   isPaused,
   botsHitBack,
   isStaticBots,
+  difficulty = 'MEDIUM',
 }: {
   data: TargetData;
   botColor: string;
@@ -1777,6 +2218,7 @@ function PlayerBot({
   isPaused?: boolean;
   botsHitBack?: boolean;
   isStaticBots?: boolean;
+  difficulty?: string;
 }) {
   const meshRef = useRef<THREE.Group>(null);
   const initialPos = useRef<[number, number, number]>(data.position);
@@ -1796,7 +2238,17 @@ function PlayerBot({
       meshRef.current.position.set(...data.position);
       initialized.current = true;
       // Assign initial random nav point
-      const NAV_POINTS = [
+      const NAV_POINTS = botsHitBack ? [
+        new THREE.Vector3(40, 1, 40), // player spawn
+        new THREE.Vector3(25, 1, 25),
+        new THREE.Vector3(10, 1, 35),
+        new THREE.Vector3(35, 1, 10),
+        new THREE.Vector3(0, 1, 0), // center
+        new THREE.Vector3(-25, 1, -25),
+        new THREE.Vector3(-40, 1, -40), // bot spawn
+        new THREE.Vector3(-30, 1, 15),
+        new THREE.Vector3(15, 1, -30),
+      ] : [
         new THREE.Vector3(30, 1, -30),
         new THREE.Vector3(45, 1, -10),
         new THREE.Vector3(5, 1, 0),
@@ -1811,36 +2263,85 @@ function PlayerBot({
 
     // Movement bobbing (vertical oscillation)
     const bob = Math.sin(state.clock.elapsedTime * 6) * 0.03;
+    const armSwing = Math.sin(state.clock.elapsedTime * 8) * 0.5;
+
+    let seeDistance = data.isSniper ? Infinity : 60;
+    let hitProb = data.isSniper ? 0.95 : 0.6;
+    let baseShootDelay = 1500;
+    if (data.isSniper) {
+      if (difficulty === 'EASY') {
+        hitProb = 0.3;
+        baseShootDelay = 3500;
+      } else if (difficulty === 'MEDIUM') {
+        hitProb = 0.5;
+        baseShootDelay = 2500;
+      } else if (difficulty === 'HARD') {
+        hitProb = 0.85;
+        baseShootDelay = 1200;
+      }
+    } else {
+      if (difficulty === 'EASY') {
+        seeDistance = 35;
+        hitProb = 0.2;
+        baseShootDelay = 2500;
+      } else if (difficulty === 'HARD') {
+        seeDistance = 80;
+        hitProb = 0.85;
+        baseShootDelay = 800;
+      }
+    }
+
+    const leftLeg = meshRef.current.getObjectByName("leftLeg");
+    const rightLeg = meshRef.current.getObjectByName("rightLeg");
+    const isMoving = mode === GameMode.MAP && !isStaticBots;
+    if (leftLeg && rightLeg) {
+      if (isMoving) {
+        leftLeg.rotation.x = armSwing;
+        rightLeg.rotation.x = -armSwing;
+      } else {
+        leftLeg.rotation.x = 0;
+        rightLeg.rotation.x = 0;
+      }
+    }
+
+    const collisionBoxes = botsHitBack ? SMALL_MAP_COLLISION_BOXES : MAP_COLLISION_BOXES;
 
     if (mode === GameMode.MAP && !isStaticBots) {
       const distToPlayer = currentPosRef.current.distanceTo(camera.position);
       let isVisible = false;
 
-      // Line of sight check using Map Collision Boxes
-      if (distToPlayer < 80) {
-        const eyePos = currentPosRef.current.clone();
-        eyePos.y += 1.0; // Bot eye level
-        
-        const dirToPlayer = new THREE.Vector3()
-          .subVectors(camera.position, eyePos)
-          .normalize();
+      // Line of sight check using Map Collision Boxes (throttled)
+      if (distToPlayer < seeDistance) {
+        if (!meshRef.current.userData.nextSightCheckTime || Date.now() > meshRef.current.userData.nextSightCheckTime) {
+          const eyePos = currentPosRef.current.clone();
+          eyePos.y += 1.0; // Bot eye level
           
-        const ray = new THREE.Ray(eyePos, dirToPlayer);
-        let occluded = false;
+          const dirToPlayer = new THREE.Vector3()
+            .subVectors(camera.position, eyePos)
+            .normalize();
+            
+          const ray = new THREE.Ray(eyePos, dirToPlayer);
+          let occluded = false;
 
-        const distToEye = eyePos.distanceTo(camera.position);
+          const distToEye = eyePos.distanceTo(camera.position);
 
-        for (const box of MAP_COLLISION_BOXES) {
-          const target = new THREE.Vector3();
-          if (ray.intersectBox(box, target)) {
-            // Check if intersection distance is less than distance to player
-            if (eyePos.distanceTo(target) < distToEye - 1.0) {
-              occluded = true;
-              break;
+          for (const box of collisionBoxes) {
+            const target = new THREE.Vector3();
+            if (ray.intersectBox(box, target)) {
+              // Check if intersection distance is less than distance to player
+              if (eyePos.distanceTo(target) < distToEye - 1.0) {
+                occluded = true;
+                break;
+              }
             }
           }
+          meshRef.current.userData.isVisible = !occluded;
+          meshRef.current.userData.nextSightCheckTime = Date.now() + 200; // Check 5 times a sec
         }
-        if (!occluded) isVisible = true;
+        isVisible = meshRef.current.userData.isVisible;
+      } else {
+        meshRef.current.userData.isVisible = false;
+        isVisible = false;
       }
 
       const nextPos = currentPosRef.current.clone();
@@ -1883,12 +2384,16 @@ function PlayerBot({
           nextPos.addScaledVector(strafeDir, oscillation * delta * strafeWidth);
         }
       } else if (!isStaticBots) {
-        // Patrol to targetNavPoint
+        // Patrol or track
+        if (botsHitBack) {
+          targetNavPoint.current = camera.position.clone();
+        }
+
         if (targetNavPoint.current) {
           const distToNav = currentPosRef.current.distanceTo(
             targetNavPoint.current,
           );
-          if (distToNav < 3) {
+          if (distToNav < 3 && !botsHitBack) {
             // Pick new nav point
             const NAV_POINTS = [
               new THREE.Vector3(30, 1, -30),
@@ -1931,8 +2436,9 @@ function PlayerBot({
       botVel.current.y += gravity * delta;
 
       // Map Bounds for Bots
-      nextPos.x = Math.max(-52, Math.min(52, nextPos.x));
-      nextPos.z = Math.max(-52, Math.min(52, nextPos.z));
+      const botBounds = botsHitBack ? 48 : 128; // Small map is -50 to 50, big map is -150 to 150
+      nextPos.x = Math.max(-botBounds, Math.min(botBounds, nextPos.x));
+      nextPos.z = Math.max(-botBounds, Math.min(botBounds, nextPos.z));
 
       // Bot-specific collision detection
       const checkBotCollision = (pos: THREE.Vector3) => {
@@ -1940,7 +2446,7 @@ function PlayerBot({
           new THREE.Vector3(pos.x, pos.y + 1.2, pos.z), // Center at waist level
           new THREE.Vector3(1.0, 2.4, 1.0),
         );
-        for (const box of MAP_COLLISION_BOXES) {
+        for (const box of collisionBoxes) {
           if (botBox.intersectsBox(box)) return true;
         }
         return false;
@@ -1960,7 +2466,7 @@ function PlayerBot({
       }
 
       // Base floor clamp
-      const minFloorY = mode === GameMode.MAP ? 0 : -1;
+      const minFloorY = (mode === GameMode.MAP || mode === GameMode.POP_BOTS) ? 0 : -1;
       if (currentPosRef.current.y < minFloorY) {
         currentPosRef.current.y = minFloorY;
         botVel.current.y = 0;
@@ -1983,9 +2489,17 @@ function PlayerBot({
 
       // Shoot player
       if (botsHitBack && Date.now() > nextShootTime.current) {
-        if (isVisible && distToPlayer < 80) {
-          onShootPlayer?.(20);
-          nextShootTime.current = Date.now() + 1500 + Math.random() * 2000;
+        if (isVisible && distToPlayer < seeDistance) {
+          if (Math.random() < hitProb) {
+            let damage = 20;
+            if (data.isSniper) {
+              damage = difficulty === 'HARD' ? 100 : (difficulty === 'MEDIUM' ? 50 : 30);
+            }
+            onShootPlayer?.(damage);
+          } else {
+            playSound("fire"); // Missed shot sound
+          }
+          nextShootTime.current = Date.now() + baseShootDelay + Math.random() * (data.isSniper ? 3000 : 1500);
         }
       }
     }
@@ -1993,49 +2507,62 @@ function PlayerBot({
 
   return (
     <group ref={meshRef}>
-      {/* Torso */}
-      <mesh
-        position={[0, 0.7, 0]}
-        name="target"
-        userData={{ id: data.id }}
-        castShadow
-      >
-        <boxGeometry args={[0.7, 1.4, 0.3]} />
-        <meshStandardMaterial color="#222" />
-      </mesh>
-
-      {/* Head */}
-      <mesh
-        position={[0, 1.65, 0]}
-        name="bot-head"
-        userData={{ id: data.id }}
-        castShadow
-      >
-        <boxGeometry args={[0.5, 0.5, 0.5]} />
-        <meshStandardMaterial color={botColor} />
-      </mesh>
-
-      {/* Arms */}
-      <mesh position={[0.45, 0.9, 0]} castShadow>
-        <boxGeometry args={[0.2, 1.2, 0.2]} />
-        <meshStandardMaterial color="#333" />
-      </mesh>
-      <mesh position={[-0.45, 0.9, 0]} castShadow>
-        <boxGeometry args={[0.2, 1.2, 0.2]} />
-        <meshStandardMaterial color="#333" />
-      </mesh>
-      {/* Bot Weapon */}
-      <group position={[0.3, 0.9, -0.4]}>
-        {/* Gun body */}
-        <mesh position={[0, -0.1, 0.2]}>
-          <boxGeometry args={[0.08, 0.15, 0.5]} />
-          <meshStandardMaterial color="#1a1a1a" />
+      <group rotation={[0, Math.PI, 0]}>
+        {/* Torso (Minecraft style) */}
+        <mesh
+          position={[0, 1.1, 0]}
+          name="target"
+          userData={{ id: data.id }}
+          castShadow
+        >
+          <boxGeometry args={[0.5, 0.75, 0.25]} />
+          <meshStandardMaterial color={data.isSniper ? "#8e44ad" : "#2d3748"} />
         </mesh>
-        {/* Barrel */}
-        <mesh position={[0, -0.05, -0.2]} rotation={[Math.PI / 2, 0, 0]}>
-          <cylinderGeometry args={[0.03, 0.03, 0.6, 8]} />
-          <meshStandardMaterial color="#111" />
+
+        {/* Head */}
+        <mesh
+          position={[0, 1.725, 0]}
+          name="bot-head"
+          userData={{ id: data.id }}
+          castShadow
+        >
+          <boxGeometry args={[0.5, 0.5, 0.5]} />
+          <meshStandardMaterial color={data.isSniper ? "#8e44ad" : botColor} />
         </mesh>
+
+        {/* Left Arm holding weapon forward */}
+        <group position={[0.375, 1.35, 0]} rotation={[Math.PI / 2, 0, 0]}>
+          <mesh position={[0, -0.275, 0]} castShadow>
+            <boxGeometry args={[0.25, 0.75, 0.25]} />
+            <meshStandardMaterial color={data.isSniper ? "#8e44ad" : botColor} />
+          </mesh>
+          {/* Bot Weapon pointing forward (-Y in this rotated group = -Z in world) */}
+          <group position={[0, -0.65, 0.05]} rotation={[-Math.PI / 2, 0, 0]}>
+            {data.isSniper ? <AWPModel /> : <AK47Model />}
+          </group>
+        </group>
+
+        {/* Right Arm resting or swinging */}
+        <mesh position={[-0.375, 0.975, 0]} castShadow>
+          <boxGeometry args={[0.25, 0.75, 0.25]} />
+          <meshStandardMaterial color={data.isSniper ? "#8e44ad" : botColor} />
+        </mesh>
+
+        {/* Left Leg */}
+        <group name="leftLeg" position={[0.125, 0.725, 0]}>
+          <mesh position={[0, -0.3625, 0]} castShadow>
+            <boxGeometry args={[0.25, 0.725, 0.25]} />
+            <meshStandardMaterial color={data.isSniper ? "#5b2c6f" : "#1a202c"} />
+          </mesh>
+        </group>
+        
+        {/* Right Leg */}
+        <group name="rightLeg" position={[-0.125, 0.725, 0]}>
+          <mesh position={[0, -0.3625, 0]} castShadow>
+            <boxGeometry args={[0.25, 0.725, 0.25]} />
+            <meshStandardMaterial color={data.isSniper ? "#5b2c6f" : "#1a202c"} />
+          </mesh>
+        </group>
       </group>
     </group>
   );
@@ -2090,27 +2617,70 @@ function VoxelTarget({
   );
 }
 
+function SunRays() {
+  const sunPos = new THREE.Vector3(100, 40, 100);
+  return (
+    <group>
+      {/* Visual sun */}
+      <mesh position={sunPos}>
+        <sphereGeometry args={[8, 32, 32]} />
+        <meshBasicMaterial color="#fffbe6" />
+      </mesh>
+      {/* Sun rays simulation */}
+      {[...Array(8)].map((_, i) => (
+        <mesh 
+          key={i} 
+          position={sunPos.clone().multiplyScalar(0.95)} 
+          rotation={[
+            -Math.PI / 4 + (Math.random() - 0.5) * 0.2, // Aimed towards center
+            Math.PI + Math.PI / 4 + (Math.random() - 0.5) * 0.2, 
+            0
+          ]}
+        >
+          <cylinderGeometry args={[2, 15, 300, 8]} />
+          <meshBasicMaterial 
+            color="#fffbe6" 
+            transparent 
+            opacity={0.02} 
+            depthWrite={false} 
+            blending={THREE.AdditiveBlending}
+          />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
 function Environment({
   theme,
   themeColor,
   mode,
+  botsHitBack,
 }: {
   theme: string;
   themeColor: string;
   mode: GameMode;
+  botsHitBack?: boolean;
 }) {
   return (
     <group>
       {/* Dynamic Background for MAP mode */}
       {mode === GameMode.MAP ? (
         <>
-          <Sky sunPosition={[100, 20, 100]} inclination={0.1} azimuth={0.25} />
-          <ambientLight intensity={1.5} />
+          <Sky sunPosition={[100, 20, 100]} inclination={0.1} azimuth={0.25} turbidity={0.1} rayleigh={0.5} />
+          <ambientLight intensity={1.0} />
           <directionalLight
             position={[100, 100, 100]}
             intensity={2}
             castShadow
+            shadow-mapSize={[2048, 2048]}
+            shadow-camera-left={-150}
+            shadow-camera-right={150}
+            shadow-camera-top={150}
+            shadow-camera-bottom={-150}
+            shadow-camera-far={500}
           />
+          <SunRays />
         </>
       ) : (
         <>
@@ -2129,24 +2699,24 @@ function Environment({
       )}
 
       {/* Floor */}
-      <mesh
-        rotation={[-Math.PI / 2, 0, 0]}
-        position={[0, mode === GameMode.MAP ? -0.01 : -1, 0]}
-        receiveShadow
-      >
-        <planeGeometry args={[200, 200]} />
-        <meshStandardMaterial
-          color={
-            mode === GameMode.MAP
-              ? "#4d3319"
-              : theme === "light"
+      {mode !== GameMode.MAP && (
+        <mesh
+          rotation={[-Math.PI / 2, 0, 0]}
+          position={[0, mode === GameMode.POP_BOTS ? 0 : -1, 0]}
+          receiveShadow
+        >
+          <planeGeometry args={[200, 200]} />
+          <meshStandardMaterial
+            color={
+              theme === "light"
                 ? "#eeeeee"
                 : theme === "retro"
                   ? "#0f0f1b"
                   : "#050505"
-          }
-        />
-      </mesh>
+            }
+          />
+        </mesh>
+      )}
 
       {/* Grid Floor - Only for trainers, not for MAP mode */}
       {mode !== GameMode.MAP && (
@@ -2164,7 +2734,7 @@ function Environment({
       {/* Voxel Obstacles for MAP mode */}
       {mode === GameMode.MAP && (
         <group>
-          {MAP_ELEMENTS.map((el, i) => (
+          {(botsHitBack ? SMALL_MAP_ELEMENTS : MAP_ELEMENTS).map((el, i) => (
             <mesh
               key={i}
               position={[el.pos[0], el.pos[1], el.pos[2]]}
@@ -2172,8 +2742,32 @@ function Environment({
               castShadow
             >
               <boxGeometry args={[el.size[0], el.size[1], el.size[2]]} />
-              <meshStandardMaterial color={el.color} />
+              <meshStandardMaterial 
+                color={el.isGrass || el.isWood || el.isCobblestone ? undefined : el.color} 
+                map={el.isGrass ? grassTexture : (el.isWood ? woodTexture : (el.isCobblestone ? cobbleTexture : undefined))}
+                roughness={el.isGrass ? 1.0 : (el.isWood ? 0.9 : 0.8)}
+              />
             </mesh>
+          ))}
+          {/* Trees */}
+          {(botsHitBack ? SMALL_MAP_TREES : MAP_TREES).map((tree, i) => (
+            <group key={`tree-${i}`} position={[tree.pos[0], tree.pos[1], tree.pos[2]]}>
+              {/* Trunk */}
+              <mesh position={[0, 2.5, 0]} receiveShadow castShadow>
+                <boxGeometry args={[1, 5, 1]} />
+                <meshStandardMaterial color="#5c4033" />
+              </mesh>
+              {/* Leaves Level 1 */}
+              <mesh position={[0, 6, 0]} receiveShadow castShadow>
+                <boxGeometry args={[5, 3, 5]} />
+                <meshStandardMaterial color="#2d5a27" />
+              </mesh>
+              {/* Leaves Level 2 */}
+              <mesh position={[0, 8, 0]} receiveShadow castShadow>
+                <boxGeometry args={[3, 2, 3]} />
+                <meshStandardMaterial color="#2d5a27" />
+              </mesh>
+            </group>
           ))}
         </group>
       )}

@@ -29,6 +29,7 @@ const DEFAULT_SETTINGS: GameSettings = {
     botsToKill: 15,
     infiniteAmmo: false,
     isStaticBots: false,
+    difficulty: 'MEDIUM',
   },
   crosshair: {
     style: 'cross',
